@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ${DB_CONTAINER_NAME:-shared-dev-db}
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devPass77}
+      - POSTGRES_DB=${POSTGRES_DB:-app_dev}
+    # Bridge networking + published port (NOT host networking) so the in-container
+    # Postgres stays on the standard 5432 while the host-facing port is remappable.
+    # Bound to 127.0.0.1 so the dev DB is never exposed beyond localhost.
+    # The default 5433 avoids colliding with a native Postgres on the host's 5432.
+    ports:
+      - "127.0.0.1:${PG_HOST_PORT:-5433}:5432"
+    volumes:
+      - shared-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # Keep the shared DB up across reboots, independent of any dev-docker.
+    restart: unless-stopped
+
+volumes:
+  shared-pg-data:

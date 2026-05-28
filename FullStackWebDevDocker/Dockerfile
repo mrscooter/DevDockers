@@ -19,7 +19,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 2: PostgreSQL client 16 from the PGDG apt repo (Ubuntu's default is older).
-# We install ONLY the client — the postgres server runs in the sibling `db` compose service.
+# We install ONLY the client - the Postgres server runs as a separate, shared
+# standalone project (see ../shared-db), reached over the host at localhost:5433.
 RUN install -d -m 755 /etc/apt/keyrings && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg && \
@@ -29,7 +30,7 @@ RUN install -d -m 755 /etc/apt/keyrings && \
         postgresql-client-16 && \
     rm -rf /var/lib/apt/lists/*
 
-# Layer 3: Node.js 20 (NodeSource) — matches AmbulaSurvey CI pin.
+# Layer 3: Node.js 20 (NodeSource). Bump here if a project needs a newer line.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
@@ -74,7 +75,7 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
     sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc && \
     { \
       echo ''; \
-      echo '# --- AmbulaSurveyDevDocker additions ---'; \
+      echo '# --- FullStackWebDevDocker additions ---'; \
       echo 'export NO_AT_BRIDGE=1'; \
       echo 'export LIBGL_ALWAYS_SOFTWARE=1'; \
       echo 'export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright'; \
@@ -87,7 +88,7 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo 'unset _keys'; \
     } >> .zshrc
 
-# Layer 9: uv (Python package manager) — AmbulaSurvey backend uses uv exclusively.
+# Layer 9: uv (Astral) - fast Python package/venv manager for the backend.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Layer 10: Claude Code CLI.

@@ -1,0 +1,42 @@
+services:
+  dev-env:
+    build:
+      context: .
+      args:
+        - USER_ID=${USER_ID:-1000}
+        - GROUP_ID=${GROUP_ID:-1000}
+    image: ${IMAGE_NAME:-fullstack-web-dev-env}
+    container_name: ${CONTAINER_NAME:-fullstack-web-dev}
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    group_add:
+      - "${DOCKER_GID}"
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - DEV_NAME=${DEV_NAME}
+      - DEV_EMAIL=${DEV_EMAIL}
+      # Shared Postgres connection. All derived from this worktree's .env; the
+      # values MUST match the standalone shared-db project (see ../shared-db).
+      # PG* are libpq's standard vars, so bare `psql` connects with no flags.
+      - PGHOST=localhost
+      - PGPORT=${PG_HOST_PORT:-5433}
+      - PGUSER=${POSTGRES_USER:-admin}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-devPass77}
+      - PGDATABASE=${POSTGRES_DB:-app_dev}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-app_dev}
+    shm_size: 256m
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${HOME}/.Xauthority:/home/devuser/.Xauthority:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - devuser-home:/home/devuser
+    # Host networking: the container shares the host's network stack, so any dev
+    # server you launch (Django, Vite, ...) is reachable on the host at the same
+    # port with no mapping, and the shared Postgres is reached at
+    # localhost:${PG_HOST_PORT}. Run several worktrees at once by giving each
+    # worktree's dev servers distinct ports.
+    network_mode: host
+
+volumes:
+  devuser-home:
