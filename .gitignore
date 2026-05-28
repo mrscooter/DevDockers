@@ -1,0 +1,9 @@
+# Per-machine env files (never versioned). Templates (.env.example) ARE tracked.
+.env
+.env-backup*
+
+# Session handoff snapshots - local working memory, not versioned.
+context_restore*.md
+
+# IDE
+.idea/
