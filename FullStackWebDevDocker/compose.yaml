@@ -31,11 +31,8 @@ services:
       - CLAUDE_UTILS_REPO=${CLAUDE_UTILS_REPO:-https://github.com/mrscooter/nicnajder-general-utils.git}
       - CLAUDE_UTILS_DIR=${CLAUDE_UTILS_DIR:-/home/devuser/Tools/nicnajder-general-utils}
     shm_size: 256m
-    devices:
-      - /dev/dri:/dev/dri
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - ${HOME}/.Xauthority:/home/devuser/.Xauthority:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - devuser-home:/home/devuser
       # Share THIS host user's Claude login (read-write: token refresh writes back).

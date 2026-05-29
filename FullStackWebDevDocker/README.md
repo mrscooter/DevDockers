@@ -35,7 +35,7 @@ you run multiple worktrees simultaneously without database port clashes.
 
 ## Setup from scratch
 
-Run these in order. Steps 0-5 are on the **host**; from step 6 you are **inside
+Run these in order. Steps 0-4 are on the **host**; from step 5 you are **inside
 the container**. Host-side commands assume you start in this directory
 (`FullStackWebDevDocker/`).
 
@@ -89,26 +89,26 @@ start the container, or the bind-mount creates a root-owned, unwritable one):
 mkdir -p ~/fast_share_fswdd       # set FASTSHARE_PATH in .env to this absolute path
 ```
 
-### 3. Allow Docker to reach your X server (host, once per login)
-
-```bash
-./xhost-setup.sh
-```
-
-### 4. Build the image
+### 3. Build the image
 
 ```bash
 docker compose build          # first build ~10-15 min (WebStorm, Playwright, apt)
 ```
 
-### 5. Start the container
+### 4. Start the container
 
 ```bash
-docker compose up -d
+./up.sh                       # grants X access for the GUI, then starts detached
 docker compose ps             # dev-env should be Up
 ```
 
-### 6. Get a shell inside
+`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the
+WebStorm GUI can open windows (warning loudly, but still starting, if there is no
+display to reach), then starts the container in the background. Re-run it any time
+- the X grant is idempotent. Extra args pass through to `docker compose up`, e.g.
+`./up.sh --build` or `./up.sh --force-recreate` (after editing `.env`).
+
+### 5. Get a shell inside
 
 ```bash
 ./zsh-into-docker-container.sh
@@ -116,7 +116,7 @@ docker compose ps             # dev-env should be Up
 
 Everything below runs inside the container.
 
-### 7. Get your project into the container
+### 6. Get your project into the container
 
 Default (Mode A) - clone it inside; lives in the container's named volume:
 
@@ -125,10 +125,13 @@ mkdir -p ~/code && cd ~/code
 git clone <your-project-url> <project>
 ```
 
+Cloning a private repo over SSH? Import your key first, or this fails with
+`permission denied (publickey)` - see [SSH keys](#ssh-keys).
+
 (Alternative Mode B mounts a host checkout instead - see
 [Providing your project](#providing-your-project-mode-a-vs-mode-b).)
 
-### 8. Create this worktree's database
+### 7. Create this worktree's database
 
 The shared server hosts one database per worktree; create yours (the `PG*` env
 vars are already set, so no flags needed):
@@ -137,7 +140,7 @@ vars are already set, so no flags needed):
 createdb $PGDATABASE
 ```
 
-### 9. Install project deps and wire up the DB
+### 8. Install project deps and wire up the DB
 
 ```bash
 cd ~/code/<project>
@@ -148,7 +151,7 @@ uv sync                                   # backend deps
 Point your app at the database using the pre-exported `DATABASE_URL` / `PG*`
 vars - see [Database connection](#database-connection).
 
-### 10. Run it
+### 9. Run it
 
 ```bash
 webstorm &                                # IDE window opens on your host display
@@ -311,9 +314,9 @@ volume; give each its own `FASTSHARE_PATH` if you want separate bridges.
 
 | Problem | Fix |
 |---------|-----|
-| WebStorm window doesn't appear | Run `./xhost-setup.sh` on the host (once per login). The error is `Can't connect to X11 window server using ':0'`. Verify `echo $DISPLAY` matches the host. |
+| WebStorm window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
 | `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? Does this worktree's DB exist (`createdb $PGDATABASE`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
 | `docker` fails inside container | `DOCKER_GID` must match `getent group docker \| cut -d: -f3`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |
-| Slow GUI | Software rendering (`LIBGL_ALWAYS_SOFTWARE=1`); for GPU tweak `devices:` in `compose.yaml`. |
+| Slow GUI | Expected - rendering is software by default (`LIBGL_ALWAYS_SOFTWARE=1`). For GPU acceleration, add a `devices: ["/dev/dri/renderD128:/dev/dri/renderD128"]` block to `compose.yaml` and unset `LIBGL_ALWAYS_SOFTWARE`. |
