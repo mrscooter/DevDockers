@@ -7,3 +7,10 @@ context_restore*.md
 
 # IDE
 .idea/
+
+# Claude Code: ignore the per-machine + ephemeral layer, but allow the shareable
+# layer (.claude/settings.json, skills/, commands/, agents/, ...) to be committed
+# for cross-machine use.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/*.lock

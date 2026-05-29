@@ -35,7 +35,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Layer 4: WebStorm — pinned, sha256-verified, extracted to /opt/, symlinked.
+# Layer 4: WebStorm - pinned, sha256-verified, extracted to /opt/, symlinked.
 # Note: download with original filename because JetBrains' .sha256 file references it.
 RUN wget -q https://download.jetbrains.com/webstorm/WebStorm-2026.1.2.tar.gz && \
     wget -q https://download.jetbrains.com/webstorm/WebStorm-2026.1.2.tar.gz.sha256 && \
@@ -85,7 +85,18 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo 'mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null && chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null'; \
       echo '_keys=(~/.ssh/id_*(N))'; \
       echo '(( ${#_keys[@]} )) && eval "$(keychain --eval --quiet "${_keys[@]}" 2>/dev/null)"'; \
+      echo '(( ${#_keys[@]} )) || {'; \
+      echo '  print -r -- "No SSH key in ~/.ssh. To use one inside this container:"'; \
+      echo '  print -r -- "  1. on the host, drop the private key into the fast_share dir (here: ~/fast_share)"'; \
+      echo '  print -r -- "  2. in here, run: import-ssh-keys-from-fastshare <name>"'; \
+      echo '}'; \
       echo 'unset _keys'; \
+      echo '# Claude login share check (non-blocking FYI on shell entry).'; \
+      echo 'if [[ ! -f ~/.claude/.credentials.json || ! -s ~/.claude/.credentials.json ]]; then'; \
+      echo '  print -r -- "Note: host Claude login is NOT shared (~/.claude/.credentials.json missing or empty)."'; \
+      echo '  print -r -- "  Fix on the HOST (log into Claude there; remove any stray dir Docker made at that path),"'; \
+      echo '  print -r -- "  then recreate: docker compose up -d --force-recreate. Or run claude here to log in locally."'; \
+      echo 'fi'; \
     } >> .zshrc
 
 # Layer 9: uv (Astral) - fast Python package/venv manager for the backend.
@@ -96,8 +107,11 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="/home/devuser/.local/bin:/home/devuser/.claude/local/bin:${PATH}"
 
-# Entrypoint applies git identity on every container start (so .env changes take effect
-# without rebuilding the image or wiping the home volume).
+# Helper to bring a hand-carried SSH key from ~/fast_share into ~/.ssh (see README).
+COPY import-ssh-keys-from-fastshare.sh /usr/local/bin/import-ssh-keys-from-fastshare
+
+# Entrypoint applies git identity + the Claude bootstrap on every container start (so
+# .env changes take effect without rebuilding the image or wiping the home volume).
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]

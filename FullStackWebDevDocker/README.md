@@ -75,9 +75,19 @@ Edit `.env` and set (the file documents every variable):
 | `DOCKER_GID` | output of `getent group docker \| cut -d: -f3` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
 | `POSTGRES_DB` | this worktree's database name (e.g. `app_dev`) |
+| `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` - see [SSH keys](#ssh-keys) |
 
 Defaults for everything else are fine on a typical UID-1000 Linux desktop.
-Validate with `docker compose config` if unsure.
+Claude login + skills work out of the box if you have logged into Claude on the
+host once - see [Claude integration](#claude-integration). Validate with
+`docker compose config` if unsure.
+
+Then create the `FASTSHARE_PATH` directory on the host (it must exist before you
+start the container, or the bind-mount creates a root-owned, unwritable one):
+
+```bash
+mkdir -p ~/fast_share_fswdd       # set FASTSHARE_PATH in .env to this absolute path
+```
 
 ### 3. Allow Docker to reach your X server (host, once per login)
 
@@ -187,6 +197,53 @@ DATABASES = {"default": {
 Other frameworks: read `DATABASE_URL`, or rely on the `PG*` vars (most libpq-based
 drivers pick them up with no explicit connection args).
 
+## Claude integration
+
+The container runs its own Claude Code CLI but reuses **your** account and personal
+setup, without baking anything machine-specific into the image. Three independent
+pieces:
+
+- **Login (shared from the host).** `compose.yaml` bind-mounts the host's
+  `${HOST_CLAUDE_DIR:-~/.claude}/.credentials.json` (read-write, so a token refresh
+  persists back) into the container. So you do not log in again inside the container.
+  Prerequisite: you have logged into Claude on the host at least once, so that file
+  exists. Only the credentials file is shared - the rest of `~/.claude` is
+  container-local.
+- **Skills + global instructions (bootstrapped on first start).** `entrypoint.sh`
+  clones the public utils repo to `~/Tools/nicnajder-general-utils`, symlinks its
+  `GLOBAL-GENERAL-CLAUDE.md` and every skill into `~/.claude`, and writes a
+  `~/.claude/CLAUDE.md` that imports only the universal rules (no Mercury). It runs
+  every start but is idempotent (create-only-if-absent), so it is a no-op after the
+  first; results persist in the home volume.
+- **Keeping it fresh.** The instruction file and skills are symlinks into the clone,
+  so editing files in the repo is reflected live. To pull *new commits*, reset the
+  generated `CLAUDE.md`, or re-point the symlinks, set `CLAUDE_BOOTSTRAP_FORCE=true`
+  in `.env` and `docker compose restart dev-env` (then set it back to `false`).
+
+All of this is configurable in `.env` (`HOST_CLAUDE_DIR`, `CLAUDE_BOOTSTRAP`,
+`CLAUDE_BOOTSTRAP_FORCE`, `CLAUDE_UTILS_REPO`, `CLAUDE_UTILS_DIR`); set
+`CLAUDE_BOOTSTRAP=false` to skip the bootstrap entirely.
+
+## SSH keys
+
+The host `~/.ssh` is deliberately **not** mounted, so unrelated keys (e.g. company
+keys) never leak into a container you may run AI agents inside. Instead you
+hand-carry only the key(s) you want, through the `~/fast_share` bridge
+(`FASTSHARE_PATH` on the host):
+
+```bash
+# on the host: put the key on the bridge
+cp ~/.ssh/id_ed25519 "$FASTSHARE_PATH"/
+
+# inside the container: import it (sets perms; lists candidates if run bare)
+import-ssh-keys-from-fastshare id_ed25519
+```
+
+The key is copied into the container-private `~/.ssh` (chmod 600) and persists in
+the home volume. keychain auto-loads `~/.ssh/id_*` on each new zsh session; until a
+key is present, a shell prints a one-time reminder pointing at this flow. You can
+then delete the copy from `fast_share` if you do not want it lingering on the bridge.
+
 ## Providing your project (Mode A vs Mode B)
 
 - **Mode A (default):** clone inside the container at `~/code/<project>`. Lives in
@@ -213,7 +270,9 @@ docker compose -p fswdd-wtB up -d
 
 Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 shared server, and **must use distinct dev-server ports** (host networking makes
-ports global on the host, so two worktrees on the same port collide).
+ports global on the host, so two worktrees on the same port collide). They all share
+the one host Claude login (`.credentials.json`), and the bootstrap runs once per
+volume; give each its own `FASTSHARE_PATH` if you want separate bridges.
 
 ## How it is wired
 
@@ -231,8 +290,11 @@ ports global on the host, so two worktrees on the same port collide).
   pins a different Playwright version, re-run `npx playwright install` (no sudo).
 - **Git identity** from `.env` is applied on every container start by
   `entrypoint.sh`; change it and `docker compose restart dev-env`.
-- **SSH keys** at `~/.ssh/id_*` are auto-loaded by keychain each shell and persist
-  in the home volume.
+- **Claude** login is shared from the host and skills/instructions are bootstrapped
+  on first start - see [Claude integration](#claude-integration).
+- **SSH keys** are NOT mounted from the host. You hand-carry the one(s) you want via
+  `~/fast_share` - see [SSH keys](#ssh-keys). Once in `~/.ssh/id_*` they are
+  auto-loaded by keychain each shell and persist in the home volume.
 
 ## Common operations
 

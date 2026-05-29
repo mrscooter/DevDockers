@@ -23,6 +23,13 @@ services:
       - PGPASSWORD=${POSTGRES_PASSWORD:-devPass77}
       - PGDATABASE=${POSTGRES_DB:-app_dev}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-app_dev}
+      # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
+      # home volume and wires skills + a Mercury-free global CLAUDE.md. The Claude
+      # LOGIN is shared separately via the .credentials.json bind-mount below.
+      - CLAUDE_BOOTSTRAP=${CLAUDE_BOOTSTRAP:-true}
+      - CLAUDE_BOOTSTRAP_FORCE=${CLAUDE_BOOTSTRAP_FORCE:-false}
+      - CLAUDE_UTILS_REPO=${CLAUDE_UTILS_REPO:-https://github.com/mrscooter/nicnajder-general-utils.git}
+      - CLAUDE_UTILS_DIR=${CLAUDE_UTILS_DIR:-/home/devuser/Tools/nicnajder-general-utils}
     shm_size: 256m
     devices:
       - /dev/dri:/dev/dri
@@ -31,6 +38,16 @@ services:
       - ${HOME}/.Xauthority:/home/devuser/.Xauthority:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - devuser-home:/home/devuser
+      # Share THIS host user's Claude login (read-write: token refresh writes back).
+      # Only the credentials file is shared; the rest of ~/.claude (skills, global
+      # CLAUDE.md, settings) stays container-local. The host file must already exist,
+      # i.e. you have logged into Claude on the host at least once.
+      - ${HOST_CLAUDE_DIR:-${HOME}/.claude}/.credentials.json:/home/devuser/.claude/.credentials.json
+      # Host->container file bridge. Drop SSH keys you want to use INSIDE the
+      # container here, then run `import-ssh-keys-from-fastshare <name>` (see README
+      # "SSH keys"). Nothing here is auto-trusted; company keys stay out unless you
+      # deliberately put them in. FASTSHARE_PATH is required (no default).
+      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
     # Host networking: the container shares the host's network stack, so any dev
     # server you launch (Django, Vite, ...) is reachable on the host at the same
     # port with no mapping, and the shared Postgres is reached at
