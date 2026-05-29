@@ -21,8 +21,8 @@ services:
       - PGPORT=${PG_HOST_PORT:-5433}
       - PGUSER=${POSTGRES_USER:-admin}
       - PGPASSWORD=${POSTGRES_PASSWORD:-devPass77}
-      - PGDATABASE=${POSTGRES_DB:-app_dev}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-app_dev}
+      - PGDATABASE=${POSTGRES_DB:-devdocker_default_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-devdocker_default_db}
       # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
       # home volume and wires skills + a Mercury-free global CLAUDE.md. The Claude
       # LOGIN is shared separately via the .credentials.json bind-mount below.

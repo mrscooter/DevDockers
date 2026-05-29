@@ -5,7 +5,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devPass77}
-      - POSTGRES_DB=${POSTGRES_DB:-app_dev}
+      - POSTGRES_DB=${POSTGRES_DB:-devdocker_default_db}
     # Bridge networking + published port (NOT host networking) so the in-container
     # Postgres stays on the standard 5432 while the host-facing port is remappable.
     # Bound to 127.0.0.1 so the dev DB is never exposed beyond localhost.
@@ -15,7 +15,7 @@ services:
     volumes:
       - shared-devdocker-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-app_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-devdocker_default_db}"]
       interval: 5s
       timeout: 5s
       retries: 12

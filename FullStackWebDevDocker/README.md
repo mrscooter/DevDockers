@@ -64,7 +64,7 @@ Edit `.env` and set (the file documents every variable):
 | `DEV_NAME` / `DEV_EMAIL` | your git identity (used inside the container) |
 | `DOCKER_GID` | output of `getent group docker \| cut -d: -f3` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
-| `POSTGRES_DB` | this worktree's database name (e.g. `app_dev`) |
+| `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
 | `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` - see [SSH keys](#ssh-keys) |
 
 Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude login + skills work out of the box if you have logged into Claude on the host once - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
