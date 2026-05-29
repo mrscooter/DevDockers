@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: ${DB_CONTAINER_NAME:-shared-dev-db}
+    container_name: ${DB_CONTAINER_NAME:-shared-devdocker-pg-db}
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devPass77}
@@ -13,7 +13,7 @@ services:
     ports:
       - "127.0.0.1:${PG_HOST_PORT:-5433}:5432"
     volumes:
-      - shared-pg-data:/var/lib/postgresql/data
+      - shared-devdocker-pg-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin}"]
       interval: 5s
@@ -23,4 +23,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  shared-pg-data:
+  shared-devdocker-pg-data:

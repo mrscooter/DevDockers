@@ -23,7 +23,7 @@ docker compose up -d
 docker compose ps             # postgres should be Up (healthy)
 ```
 
-`restart: unless-stopped` keeps it running across reboots, independent of any dev-docker. The data lives in the named volume `shared-pg-data` and survives `docker compose down`; only `docker compose down -v` wipes it.
+`restart: unless-stopped` keeps it running across reboots, independent of any dev-docker. The data lives in the named volume `shared-devdocker-pg-data` and survives `docker compose down`; only `docker compose down -v` wipes it.
 
 ## Per-worktree databases
 
