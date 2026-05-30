@@ -14,15 +14,16 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - DEV_NAME=${DEV_NAME}
       - DEV_EMAIL=${DEV_EMAIL}
-      # Shared Postgres connection. All derived from this worktree's .env; the
-      # values MUST match the standalone shared-db project (see ../shared-db).
-      # PG* are libpq's standard vars, so bare `psql` connects with no flags.
+      # Shared Postgres CONNECTION params only (must match the ../shared-db project).
+      # Deliberately no PGDATABASE: the database is never ambient, so nothing connects
+      # to a shared default by accident - pick it explicitly (psql -d, or app config).
       - PGHOST=localhost
       - PGPORT=${PG_HOST_PORT:-5433}
       - PGUSER=${POSTGRES_USER:-admin}
       - PGPASSWORD=${POSTGRES_PASSWORD:-devPass77}
-      - PGDATABASE=${POSTGRES_DB:-devdocker_default_db}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-devdocker_default_db}
+      # Base URL for the default DB - NOT named DATABASE_URL so it can't auto-wire or
+      # shadow a worktree's own .env. A template to derive your per-worktree URL from.
+      - BASE_DEV_DB_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-devdocker_default_db}
       # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
       # home volume and wires skills + a Mercury-free global CLAUDE.md. The Claude
       # LOGIN is shared separately via the .credentials.json bind-mount below.

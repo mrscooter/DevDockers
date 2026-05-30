@@ -113,10 +113,10 @@ Cloning a private repo over SSH? Import your key first, or this fails with `perm
 
 ### 7. Create this worktree's database
 
-The shared server hosts one database per worktree; create yours (the `PG*` env vars are already set, so no flags needed):
+The shared server hosts one database per worktree; create yours (the `PG*` vars supply the connection - just name the DB explicitly):
 
 ```bash
-createdb $PGDATABASE
+createdb my_worktree_db        # use the DB name your app's .env / DATABASE_URL points at
 ```
 
 ### 8. Install project deps and wire up the DB
@@ -127,7 +127,7 @@ uv sync                                   # backend deps
 ( cd <frontend-dir> && npm ci )           # frontend deps
 ```
 
-Point your app at the database using the pre-exported `DATABASE_URL` / `PG*` vars - see [Database connection](#database-connection).
+Point your app at the DB via the `PG*` connection vars plus an explicit database name (the `BASE_DEV_DB_URL` template is a handy starting point) - see [Database connection](#database-connection).
 
 ### 9. Run it
 
@@ -145,34 +145,29 @@ That is the whole setup. The sections below are reference.
 
 ## Database connection
 
-Postgres runs in [../shared-db](../shared-db/), reachable inside the container at `localhost:5433`. The connection is pre-exported as environment variables (from your `.env`):
+Postgres runs in [../shared-db](../shared-db/), reachable inside the container at `localhost:5433`. The container pre-exports only the libpq **connection** vars (host/port/user/password from your `.env`) - **not** the database, on purpose, so nothing silently uses a shared default:
 
 ```bash
-echo $DATABASE_URL        # postgresql://admin:devPass77@localhost:5433/<your_db>
 echo $PGHOST:$PGPORT      # localhost:5433
-psql                      # bare - uses the standard PG* vars, no flags
+echo $BASE_DEV_DB_URL     # postgresql://admin:devPass77@localhost:5433/devdocker_default_db
+psql -d <your_db>         # bare `psql` has no default DB - always pass -d
 ```
 
-Wire your app to it. **Django via `DATABASE_URL`** (recommended):
+`BASE_DEV_DB_URL` is a **template only**. It is deliberately not named `DATABASE_URL`, so no framework auto-consumes it (and it can't shadow a worktree's own `.env`). It points at the shared *default* database; for a real project set your app's own DB config - typically this same string with the database name swapped for your worktree's DB.
+
+Each worktree picks its DB explicitly, so several can share the one server without colliding. Wiring Django from the `PG*` connection vars plus an explicit name:
 
 ```python
-# settings.py  (needs `dj-database-url`)
-import os, dj_database_url
-DATABASES = {"default": dj_database_url.config(default=os.environ["DATABASE_URL"])}
-```
-
-Or explicitly, from the `PG*` vars:
-
-```python
+import os
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.postgresql",
-    "NAME": os.environ["PGDATABASE"], "USER": os.environ["PGUSER"],
-    "PASSWORD": os.environ["PGPASSWORD"],
+    "NAME": "my_worktree_db",                       # this worktree's DB (you created it)
+    "USER": os.environ["PGUSER"], "PASSWORD": os.environ["PGPASSWORD"],
     "HOST": os.environ["PGHOST"], "PORT": os.environ["PGPORT"],
 }}
 ```
 
-Other frameworks: read `DATABASE_URL`, or rely on the `PG*` vars (most libpq-based drivers pick them up with no explicit connection args).
+Or have the app read its own `DATABASE_URL` (e.g. `dj-database-url` / `django-environ`), set in the project's `.env` to `BASE_DEV_DB_URL` with the DB name swapped.
 
 ## Claude integration
 
@@ -247,7 +242,7 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 | Problem | Fix |
 |---------|-----|
 | WebStorm window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
-| `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? Does this worktree's DB exist (`createdb $PGDATABASE`)? |
+| `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? There's no ambient DB - are you naming one (`psql -d <db>`)? Does it exist (`createdb <db>`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
 | `docker` fails inside container | `DOCKER_GID` must match `getent group docker \| cut -d: -f3`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |
