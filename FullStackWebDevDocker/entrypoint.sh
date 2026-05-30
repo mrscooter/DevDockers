@@ -138,4 +138,25 @@ if [ "${CLAUDE_BOOTSTRAP:-true}" = "true" ]; then
   claude_bootstrap || echo "[claude-bootstrap] WARNING: bootstrap failed; continuing without it"
 fi
 
+# --- micro editor defaults ---------------------------------------------------
+# Soft-wrap at the screen edge on word boundaries. Lives in the home volume, which
+# masks anything baked into the image after first creation, so it is set here on
+# every start. Fills missing keys only, leaving any user overrides intact.
+python3 - "${HOME}/.config/micro/settings.json" <<'PY' || echo "[micro-defaults] WARNING: could not write micro settings"
+import json, os, sys
+p = sys.argv[1]
+os.makedirs(os.path.dirname(p), exist_ok=True)
+try:
+    d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
+except Exception:
+    d = {}
+changed = False
+for k in ("softwrap", "wordwrap"):
+    if k not in d:
+        d[k] = True
+        changed = True
+if changed:
+    json.dump(d, open(p, "w"), indent=4)
+PY
+
 exec "$@"
