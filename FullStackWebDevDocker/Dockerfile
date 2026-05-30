@@ -3,9 +3,9 @@ FROM ubuntu:24.04
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Layer 1: Core system packages, editors, X11/DBus/GL libs for GUI apps,
-# Playwright OS deps, Docker CLI (for DinD via host socket), keychain. One apt layer,
-# cleanup in same RUN to keep image lean.
+# Layer 1: Core system packages, editors, X11/DBus/GL + GUI shared libs (for the WebStorm
+# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here), Docker
+# CLI (for DinD via host socket), keychain. One apt layer, cleanup in same RUN to stay lean.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git make sudo zsh tree jq xclip \
         vim nano bat micro \
@@ -63,12 +63,15 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
 RUN dbus-uuidgen > /etc/machine-id && \
     ln -sf /etc/machine-id /var/lib/dbus/machine-id
 
-# Layer 7: Playwright browsers baked into /opt/ms-playwright (system-wide).
-# Installed as root, then ownership handed to devuser so they can also upgrade later
-# without sudo. OS deps are already installed in layer 1, so --with-deps is unnecessary.
+# Layer 7: Playwright browsers baked into /opt/ms-playwright (system-wide), WITH their
+# OS shared-library deps. --with-deps apt-installs the full browser dep set: Chromium,
+# Firefox AND WebKit need libs (libgtk-3/4, libgstreamer, libXfixes, libXcursor, ...)
+# a hand-picked subset misses, so browsers fail to launch without it. Run as root at
+# build; browsers chowned to devuser so they can be upgraded later without sudo.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN npx --yes playwright@1.60.0 install chromium firefox webkit && \
-    chown -R $USER_ID:$GROUP_ID /opt/ms-playwright
+RUN npx --yes playwright@1.60.0 install --with-deps chromium firefox webkit && \
+    chown -R $USER_ID:$GROUP_ID /opt/ms-playwright && \
+    rm -rf /var/lib/apt/lists/*
 
 USER devuser
 WORKDIR /home/devuser
