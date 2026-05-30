@@ -18,16 +18,21 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         docker.io keychain \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 2: PostgreSQL client 16 from the PGDG apt repo (Ubuntu's default is older).
-# We install ONLY the client - the Postgres server runs as a separate, shared
-# standalone project (see ../shared-db), reached over the host at localhost:5433.
+# Layer 2: Current CLIs from official apt repos (Ubuntu's are older/absent) -
+# PostgreSQL client 16 (PGDG) and GitHub CLI (gh). Postgres: client only; the server
+# runs as a separate shared project (see ../shared-db), reached at localhost:5433.
 RUN install -d -m 755 /etc/apt/keyrings && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt noble-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list && \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+        -o /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+    chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+        > /etc/apt/sources.list.d/github-cli.list && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        postgresql-client-16 && \
+        postgresql-client-16 gh && \
     rm -rf /var/lib/apt/lists/*
 
 # Layer 3: Node.js 20 (NodeSource). Bump here if a project needs a newer line.
