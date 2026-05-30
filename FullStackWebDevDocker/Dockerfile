@@ -8,7 +8,7 @@ ARG GROUP_ID=1000
 # CLI (for DinD via host socket), keychain. One apt layer, cleanup in same RUN to stay lean.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git make sudo zsh tree jq xclip \
-        vim nano bat micro \
+        vim nano bat micro less \
         python3 python3-venv \
         dbus dbus-x11 libgl1-mesa-dri libegl-mesa0 adwaita-icon-theme \
         gsettings-desktop-schemas at-spi2-core fonts-dejavu \
@@ -18,9 +18,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         docker.io keychain \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 2: Current CLIs from official apt repos (Ubuntu's are older/absent) -
-# PostgreSQL client 16 (PGDG) and GitHub CLI (gh). Postgres: client only; the server
-# runs as a separate shared project (see ../shared-db), reached at localhost:5433.
+# Layer 2: Tools from official apt repos (Ubuntu's are older/absent) - PostgreSQL
+# client 16 (PGDG), GitHub CLI (gh), and the Typora markdown editor (GUI, runs over
+# X11 like WebStorm; commercial app with a free trial). Postgres: client only; the
+# server runs as a separate shared project (see ../shared-db), reached at localhost:5433.
 RUN install -d -m 755 /etc/apt/keyrings && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /etc/apt/keyrings/postgresql.gpg && \
@@ -31,8 +32,12 @@ RUN install -d -m 755 /etc/apt/keyrings && \
     chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
         > /etc/apt/sources.list.d/github-cli.list && \
+    curl -fsSL https://typora.io/linux/public-key.asc \
+        | gpg --dearmor -o /etc/apt/keyrings/typora.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/typora.gpg] https://typora.io/linux ./" \
+        > /etc/apt/sources.list.d/typora.list && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        postgresql-client-16 gh && \
+        postgresql-client-16 gh typora && \
     rm -rf /var/lib/apt/lists/*
 
 # Layer 3: Node.js 20 (NodeSource). Bump here if a project needs a newer line.
