@@ -79,6 +79,9 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo 'export NO_AT_BRIDGE=1'; \
       echo 'export LIBGL_ALWAYS_SOFTWARE=1'; \
       echo 'export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright'; \
+      echo '# docker exec gives a colorless TERM / no COLORTERM; advertise real capability for TUIs'; \
+      echo 'export COLORTERM="${COLORTERM:-truecolor}"'; \
+      echo '[[ "$TERM" == "xterm" || "$TERM" == "dumb" ]] && export TERM=xterm-256color'; \
       echo 'export PATH="$HOME/.local/bin:$HOME/.claude/local/bin:$PATH"'; \
       echo "alias bat='batcat'"; \
       echo 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"'; \

@@ -95,6 +95,42 @@ tell the user; do not silently proceed with missing instructions.
 EOF
   fi
 
+  # 4. Mark Claude onboarding complete so the container uses the shared host login
+  # directly instead of dropping into the first-run login/onboarding chooser. Only
+  # ~/.claude/.credentials.json is shared from the host; ~/.claude.json is
+  # container-local, so without this a fresh home volume starts "un-onboarded" and
+  # prompts to log in despite the valid mounted credentials.
+  python3 - "${HOME}/.claude.json" <<'PY' || echo "[claude-bootstrap] WARNING: could not set hasCompletedOnboarding"
+import json, os, sys
+p = sys.argv[1]
+try:
+    d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
+except Exception:
+    d = {}
+if d.get("hasCompletedOnboarding") is not True:
+    d["hasCompletedOnboarding"] = True
+    json.dump(d, open(p, "w"), indent=2)
+PY
+
+  # 5. Status line: symlink the shared script and point settings.json at it (only if
+  # the utils repo ships claude/statusline-command.sh; absent -> simply skipped).
+  local statusline_src="${dir}/claude/statusline-command.sh"
+  if [ -f "${statusline_src}" ]; then
+    _bootstrap_link "${statusline_src}" "${claude_home}/statusline-command.sh"
+    python3 - "${claude_home}/settings.json" <<'PY' || echo "[claude-bootstrap] WARNING: could not set statusLine in settings.json"
+import json, os, sys
+p = sys.argv[1]
+try:
+    d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
+except Exception:
+    d = {}
+want = {"type": "command", "command": "bash ~/.claude/statusline-command.sh"}
+if d.get("statusLine") != want:
+    d["statusLine"] = want
+    json.dump(d, open(p, "w"), indent=2)
+PY
+  fi
+
   echo "[claude-bootstrap] done"
 }
 
