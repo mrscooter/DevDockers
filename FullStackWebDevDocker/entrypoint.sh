@@ -9,6 +9,7 @@ git config --global user.email "${DEV_EMAIL}"
 # Sane defaults so common git ops behave well.
 git config --global init.defaultBranch master
 git config --global pull.rebase false
+git config --global push.autoSetupRemote true
 
 # --- Claude login seed ---------------------------------------------------------
 # The host's ~/.claude/.credentials.json is bind-mounted READ-ONLY at a staging
