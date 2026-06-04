@@ -10,14 +10,31 @@ git config --global user.email "${DEV_EMAIL}"
 git config --global init.defaultBranch master
 git config --global pull.rebase false
 
+# --- Claude login seed ---------------------------------------------------------
+# The host's ~/.claude/.credentials.json is bind-mounted READ-ONLY at a staging
+# path (see compose.yaml for why it cannot be mounted at the real path) and copied
+# into place here on every container start. The container then refreshes its own
+# copy independently; if its login ever goes stale (claude reports 401 / asks to
+# /login), a `docker compose restart` re-seeds it from the host's current login.
+CLAUDE_CREDS_SEED=/run/host-claude-credentials.json
+if [ -s "${CLAUDE_CREDS_SEED}" ]; then
+  mkdir -p "${HOME}/.claude"
+  install -m 600 "${CLAUDE_CREDS_SEED}" "${HOME}/.claude/.credentials.json" \
+    && echo "[claude-creds] seeded ~/.claude/.credentials.json from the host login" \
+    || echo "[claude-creds] WARNING: could not copy host Claude credentials into ~/.claude"
+else
+  echo "[claude-creds] NOTE: no host Claude login shared (seed missing/empty at ${CLAUDE_CREDS_SEED})." \
+       "Log into Claude on the host and restart the container, or run claude here and log in locally."
+fi
+
 # --- Claude bootstrap --------------------------------------------------------
 # Wire up this user's personal Claude setup INSIDE the container's home volume,
 # without baking anything machine-specific into the image:
 #   1. clone the public utils repo (skills + universal instructions),
 #   2. symlink its GLOBAL-GENERAL-CLAUDE.md + every skill into ~/.claude,
 #   3. write a ~/.claude/CLAUDE.md that imports only the universal rules.
-# The Claude *login* is NOT handled here - it is shared from the host via a
-# bind-mount of ~/.claude/.credentials.json (see compose.yaml).
+# The Claude *login* is NOT handled here - it is seeded from the host in the
+# "Claude login seed" section above.
 #
 # Idempotent: by default each step is "create only if absent", so it is a no-op on
 # every start after the first (the home volume persists the results). Set

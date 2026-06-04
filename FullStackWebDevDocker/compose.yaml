@@ -36,11 +36,16 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /var/run/docker.sock:/var/run/docker.sock
       - devuser-home:/home/devuser
-      # Share THIS host user's Claude login (read-write: token refresh writes back).
-      # Only the credentials file is shared; the rest of ~/.claude (skills, global
-      # CLAUDE.md, settings) stays container-local. The host file must already exist,
-      # i.e. you have logged into Claude on the host at least once.
-      - ${HOST_CLAUDE_DIR:-${HOME}/.claude}/.credentials.json:/home/devuser/.claude/.credentials.json
+      # Seed for the host's Claude login, mounted READ-ONLY at a staging path and
+      # COPIED into ~/.claude by entrypoint.sh on every container start. It must be a
+      # copy, not a mount at the real path: Claude Code replaces the file via rename
+      # on every token refresh, and a single-file bind mount pins the inode - the
+      # host-side rename leaves the mount stale (401s once the old token expires),
+      # and the container-side rename fails (cannot rename over a mountpoint). With
+      # a local copy the container refreshes its own login independently; restarting
+      # the container re-seeds it from the host's then-current login. The host file
+      # must already exist, i.e. you have logged into Claude on the host at least once.
+      - ${HOST_CLAUDE_DIR:-${HOME}/.claude}/.credentials.json:/run/host-claude-credentials.json:ro
       # Host->container file bridge. Drop SSH keys you want to use INSIDE the
       # container here, then run `import-ssh-keys-from-fastshare <name>` (see README
       # "SSH keys"). Nothing here is auto-trusted; company keys stay out unless you

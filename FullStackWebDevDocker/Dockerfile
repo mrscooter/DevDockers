@@ -113,11 +113,11 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo '  print -r -- "  2. in here, run: import-ssh-keys-from-fastshare <name>"'; \
       echo '}'; \
       echo 'unset _keys'; \
-      echo '# Claude login share check (non-blocking FYI on shell entry).'; \
-      echo 'if [[ ! -f ~/.claude/.credentials.json || ! -s ~/.claude/.credentials.json ]]; then'; \
-      echo '  print -r -- "Note: host Claude login is NOT shared (~/.claude/.credentials.json missing or empty)."'; \
-      echo '  print -r -- "  Fix on the HOST (log into Claude there; remove any stray dir Docker made at that path),"'; \
-      echo '  print -r -- "  then recreate: docker compose up -d --force-recreate. Or run claude here to log in locally."'; \
+      echo '# Claude login check (non-blocking FYI on shell entry; entrypoint.sh seeds the file from the host).'; \
+      echo 'if [[ ! -s ~/.claude/.credentials.json ]]; then'; \
+      echo '  print -r -- "Note: no Claude login present (~/.claude/.credentials.json missing or empty)."'; \
+      echo '  print -r -- "  Share the host login: log into Claude on the HOST (remove any stray dir Docker made at"'; \
+      echo '  print -r -- "  ~/.claude/.credentials.json there), then: docker compose restart. Or run claude here to log in locally."'; \
       echo 'fi'; \
     } >> .zshrc
 
