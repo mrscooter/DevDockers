@@ -4,8 +4,8 @@ ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Layer 1: Core system packages, editors, X11/DBus/GL + GUI shared libs (for the WebStorm
-# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here), Docker
-# CLI (for DinD via host socket), keychain. One apt layer, cleanup in same RUN to stay lean.
+# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here),
+# keychain. One apt layer, cleanup in same RUN to stay lean.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git make sudo zsh tree jq xclip iproute2 \
         vim nano bat micro less \
@@ -15,7 +15,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 \
         libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libasound2t64 \
         libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libxshmfence1 \
-        docker.io keychain \
+        keychain \
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 2: Tools from official apt repos (Ubuntu's are older/absent) - PostgreSQL

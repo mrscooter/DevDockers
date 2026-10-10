@@ -8,8 +8,6 @@ services:
     image: ${IMAGE_NAME:-fullstack-web-dev-env}
     container_name: ${CONTAINER_NAME:-fullstack-web-dev}
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
-    group_add:
-      - "${DOCKER_GID}"
     environment:
       - DISPLAY=${DISPLAY:-:0}
       - DEV_NAME=${DEV_NAME}
@@ -34,7 +32,6 @@ services:
     shm_size: 256m
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - /var/run/docker.sock:/var/run/docker.sock
       - devuser-home:/home/devuser
       # Seed for the host's Claude login, mounted READ-ONLY at a staging path and
       # COPIED into ~/.claude by entrypoint.sh on every container start. It must be a

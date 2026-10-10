@@ -21,7 +21,7 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 | Backend | Python 3.12 + `uv` (Astral) |
 | Frontend | Node.js 20 + npm, Playwright browsers pre-baked |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
-| Shell / tools | zsh + Oh My Zsh + keychain, Claude Code CLI, git, Docker CLI, vim/nano/micro/bat, jq, tree, xclip |
+| Shell / tools | zsh + Oh My Zsh + keychain, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
 
@@ -62,7 +62,6 @@ Edit `.env` and set (the file documents every variable):
 | Variable | Value |
 |---|---|
 | `DEV_NAME` / `DEV_EMAIL` | your git identity (used inside the container) |
-| `DOCKER_GID` | output of `getent group docker \| cut -d: -f3` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
 | `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
 | `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` - see [SSH keys](#ssh-keys) |
@@ -220,7 +219,7 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
 - **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, `~/.ssh`, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB).
-- **Docker-in-Docker** - the host's `/var/run/docker.sock` is mounted in, so `docker` inside runs against the host engine (sibling containers). `DOCKER_GID` grants `devuser` access to the socket.
+- **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
 - **Playwright** browsers are baked at `/opt/ms-playwright` (owned by `devuser`), `PLAYWRIGHT_BROWSERS_PATH` exported - e2e tests run immediately. If your project pins a different Playwright version, re-run `npx playwright install` (no sudo).
 - **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
 - **Claude** login is shared from the host and skills/instructions are bootstrapped on first start - see [Claude integration](#claude-integration).
@@ -244,6 +243,5 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 | WebStorm window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
 | `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? There's no ambient DB - are you naming one (`psql -d <db>`)? Does it exist (`createdb <db>`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
-| `docker` fails inside container | `DOCKER_GID` must match `getent group docker \| cut -d: -f3`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |
 | Slow GUI | Expected - rendering is software by default (`LIBGL_ALWAYS_SOFTWARE=1`). For GPU acceleration, add a `devices: ["/dev/dri/renderD128:/dev/dri/renderD128"]` block to `compose.yaml` and unset `LIBGL_ALWAYS_SOFTWARE`. |
