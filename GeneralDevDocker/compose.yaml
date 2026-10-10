@@ -1,0 +1,33 @@
+services:
+  dev-env:
+    build:
+      context: .
+      args:
+        - USER_ID=${USER_ID:-1000}
+        - GROUP_ID=${GROUP_ID:-1000}
+    image: ${IMAGE_NAME:-general-dev-env}
+    container_name: ${CONTAINER_NAME:-general-dev}
+    # Fixed hostname: the bridge network otherwise assigns the container ID, which changes
+    # on every recreate (keychain keys its agent files by hostname).
+    hostname: ${CONTAINER_NAME:-general-dev}
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - DEV_NAME=${DEV_NAME}
+      - DEV_EMAIL=${DEV_EMAIL}
+    # Electron apps (Typora) need more than Docker's 64 MB default /dev/shm.
+    shm_size: 256m
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - devuser-home:/home/devuser
+      # Host->container file bridge, the only host directory shared. Drop SSH keys you want
+      # to use INSIDE the container here, then run `import-ssh-keys-from-fastshare <name>`
+      # (see README "SSH keys"). FASTSHARE_PATH is required (no default).
+      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
+    # Default bridge network, no published ports: the container has its own network
+    # namespace, so services listening on the host's 127.0.0.1 are unreachable from it,
+    # and nothing inside is reachable from the host. Outbound internet works normally.
+    # Deliberately no /var/run/docker.sock (root-equivalent on the host).
+
+volumes:
+  devuser-home:
