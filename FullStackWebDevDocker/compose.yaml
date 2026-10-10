@@ -24,7 +24,8 @@ services:
       - BASE_DEV_DB_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-devdocker_default_db}
       # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
       # home volume and wires skills + a Mercury-free global CLAUDE.md. The Claude
-      # LOGIN is shared separately via the .credentials.json bind-mount below.
+      # LOGIN is deliberately not shared from the host: log in inside the container
+      # (it persists in the home volume).
       - CLAUDE_BOOTSTRAP=${CLAUDE_BOOTSTRAP:-true}
       - CLAUDE_BOOTSTRAP_FORCE=${CLAUDE_BOOTSTRAP_FORCE:-false}
       - CLAUDE_UTILS_REPO=${CLAUDE_UTILS_REPO:-https://github.com/mrscooter/nicnajder-general-utils.git}
@@ -33,16 +34,6 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - devuser-home:/home/devuser
-      # Seed for the host's Claude login, mounted READ-ONLY at a staging path and
-      # COPIED into ~/.claude by entrypoint.sh on every container start. It must be a
-      # copy, not a mount at the real path: Claude Code replaces the file via rename
-      # on every token refresh, and a single-file bind mount pins the inode - the
-      # host-side rename leaves the mount stale (401s once the old token expires),
-      # and the container-side rename fails (cannot rename over a mountpoint). With
-      # a local copy the container refreshes its own login independently; restarting
-      # the container re-seeds it from the host's then-current login. The host file
-      # must already exist, i.e. you have logged into Claude on the host at least once.
-      - ${HOST_CLAUDE_DIR:-${HOME}/.claude}/.credentials.json:/run/host-claude-credentials.json:ro
       # Host->container file bridge. Drop SSH keys you want to use INSIDE the
       # container here, then run `import-ssh-keys-from-fastshare <name>` (see README
       # "SSH keys"). Nothing here is auto-trusted; company keys stay out unless you

@@ -11,31 +11,14 @@ git config --global init.defaultBranch master
 git config --global pull.rebase false
 git config --global push.autoSetupRemote true
 
-# --- Claude login seed ---------------------------------------------------------
-# The host's ~/.claude/.credentials.json is bind-mounted READ-ONLY at a staging
-# path (see compose.yaml for why it cannot be mounted at the real path) and copied
-# into place here on every container start. The container then refreshes its own
-# copy independently; if its login ever goes stale (claude reports 401 / asks to
-# /login), a `docker compose restart` re-seeds it from the host's current login.
-CLAUDE_CREDS_SEED=/run/host-claude-credentials.json
-if [ -s "${CLAUDE_CREDS_SEED}" ]; then
-  mkdir -p "${HOME}/.claude"
-  install -m 600 "${CLAUDE_CREDS_SEED}" "${HOME}/.claude/.credentials.json" \
-    && echo "[claude-creds] seeded ~/.claude/.credentials.json from the host login" \
-    || echo "[claude-creds] WARNING: could not copy host Claude credentials into ~/.claude"
-else
-  echo "[claude-creds] NOTE: no host Claude login shared (seed missing/empty at ${CLAUDE_CREDS_SEED})." \
-       "Log into Claude on the host and restart the container, or run claude here and log in locally."
-fi
-
 # --- Claude bootstrap --------------------------------------------------------
 # Wire up this user's personal Claude setup INSIDE the container's home volume,
 # without baking anything machine-specific into the image:
 #   1. clone the public utils repo (skills + universal instructions),
 #   2. symlink its GLOBAL-GENERAL-CLAUDE.md + every skill into ~/.claude,
 #   3. write a ~/.claude/CLAUDE.md that imports only the universal rules.
-# The Claude *login* is NOT handled here - it is seeded from the host in the
-# "Claude login seed" section above.
+# The Claude *login* is NOT handled here - it is container-local and separate from
+# the host's: run claude and log in once, it persists in the home volume.
 #
 # Idempotent: by default each step is "create only if absent", so it is a no-op on
 # every start after the first (the home volume persists the results). Set
@@ -113,24 +96,7 @@ tell the user; do not silently proceed with missing instructions.
 EOF
   fi
 
-  # 4. Mark Claude onboarding complete so the container uses the shared host login
-  # directly instead of dropping into the first-run login/onboarding chooser. Only
-  # ~/.claude/.credentials.json is shared from the host; ~/.claude.json is
-  # container-local, so without this a fresh home volume starts "un-onboarded" and
-  # prompts to log in despite the valid mounted credentials.
-  python3 - "${HOME}/.claude.json" <<'PY' || echo "[claude-bootstrap] WARNING: could not set hasCompletedOnboarding"
-import json, os, sys
-p = sys.argv[1]
-try:
-    d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
-except Exception:
-    d = {}
-if d.get("hasCompletedOnboarding") is not True:
-    d["hasCompletedOnboarding"] = True
-    json.dump(d, open(p, "w"), indent=2)
-PY
-
-  # 5. Status line: symlink the shared script and point settings.json at it (only if
+  # 4. Status line: symlink the shared script and point settings.json at it (only if
   # the utils repo ships claude/statusline-command.sh; absent -> simply skipped).
   local statusline_src="${dir}/claude/statusline-command.sh"
   if [ -f "${statusline_src}" ]; then
