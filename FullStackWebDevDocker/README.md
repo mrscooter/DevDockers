@@ -21,7 +21,7 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 | Backend | Python 3.12 + `uv` (Astral) |
 | Frontend | Node.js 20 + npm, Playwright browsers pre-baked |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
-| Shell / tools | zsh + Oh My Zsh + keychain, Claude Code CLI, git, Docker CLI, vim/nano/micro/bat, jq, tree, xclip |
+| Shell / tools | zsh + Oh My Zsh + keychain, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
 
@@ -62,12 +62,11 @@ Edit `.env` and set (the file documents every variable):
 | Variable | Value |
 |---|---|
 | `DEV_NAME` / `DEV_EMAIL` | your git identity (used inside the container) |
-| `DOCKER_GID` | output of `getent group docker \| cut -d: -f3` |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
 | `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
 | `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` - see [SSH keys](#ssh-keys) |
 
-Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude login + skills work out of the box if you have logged into Claude on the host once - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
+Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude skills work out of the box; the Claude login is separate from the host's, so you log in once inside the container - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
 
 Then create the `FASTSHARE_PATH` directory on the host (it must exist before you start the container, or the bind-mount creates a root-owned, unwritable one):
 
@@ -171,13 +170,13 @@ Or have the app read its own `DATABASE_URL` (e.g. `dj-database-url` / `django-en
 
 ## Claude integration
 
-The container runs its own Claude Code CLI but reuses **your** account and personal setup, without baking anything machine-specific into the image. Three independent pieces:
+The container runs its own Claude Code CLI with its own login and your personal skills/instructions, without baking anything machine-specific into the image. Three independent pieces:
 
-- **Login (seeded from the host).** `compose.yaml` bind-mounts the host's `${HOST_CLAUDE_DIR:-~/.claude}/.credentials.json` read-only at a staging path, and `entrypoint.sh` copies it into the container's `~/.claude/` on every container start - so you do not log in again inside the container, and the container refreshes its own copy independently from there. (It cannot be mounted at the real path directly: Claude Code replaces the file via rename on every token refresh, and a single-file bind mount pins the inode - the container's view goes stale and starts 401ing once the old token expires.) Prerequisite: you have logged into Claude on the host at least once, so the host file exists. Only the credentials file is shared - the rest of `~/.claude` is container-local. If the container's login ever goes stale anyway (claude reports 401 / asks to `/login`), `docker compose restart` re-seeds it from the host's current login.
+- **Login (container-local).** Nothing from the host's `~/.claude` is mounted, so the host login never reaches the container. Run `claude` inside the container and log in (open the URL it prints in your host browser). The login lands in `~/.claude/.credentials.json` in the home volume: it survives restarts and is wiped only by `docker compose down -v`. Host and container are separate logins.
 - **Skills + global instructions (bootstrapped on first start).** `entrypoint.sh` clones the public utils repo to `~/Tools/nicnajder-general-utils`, symlinks its `GLOBAL-GENERAL-CLAUDE.md` and every skill into `~/.claude`, and writes a `~/.claude/CLAUDE.md` that imports only the universal rules (no Mercury). It runs every start but is idempotent (create-only-if-absent), so it is a no-op after the first; results persist in the home volume.
 - **Keeping it fresh.** The instruction file and skills are symlinks into the clone, so editing files in the repo is reflected live. To pull *new commits*, reset the generated `CLAUDE.md`, or re-point the symlinks, set `CLAUDE_BOOTSTRAP_FORCE=true` in `.env` and `docker compose restart dev-env` (then set it back to `false`).
 
-All of this is configurable in `.env` (`HOST_CLAUDE_DIR`, `CLAUDE_BOOTSTRAP`, `CLAUDE_BOOTSTRAP_FORCE`, `CLAUDE_UTILS_REPO`, `CLAUDE_UTILS_DIR`); set `CLAUDE_BOOTSTRAP=false` to skip the bootstrap entirely.
+The bootstrap is configurable in `.env` (`CLAUDE_BOOTSTRAP`, `CLAUDE_BOOTSTRAP_FORCE`, `CLAUDE_UTILS_REPO`, `CLAUDE_UTILS_DIR`); set `CLAUDE_BOOTSTRAP=false` to skip the bootstrap entirely.
 
 ## SSH keys
 
@@ -214,16 +213,16 @@ cd FullStackWebDevDocker-wtB
 docker compose -p fswdd-wtB up -d
 ```
 
-Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). They all share the one host Claude login (`.credentials.json`), and the bootstrap runs once per volume; give each its own `FASTSHARE_PATH` if you want separate bridges.
+Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy), and the bootstrap runs once per volume; give each its own `FASTSHARE_PATH` if you want separate bridges.
 
 ## How it is wired
 
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
 - **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, `~/.ssh`, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB).
-- **Docker-in-Docker** - the host's `/var/run/docker.sock` is mounted in, so `docker` inside runs against the host engine (sibling containers). `DOCKER_GID` grants `devuser` access to the socket.
+- **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
 - **Playwright** browsers are baked at `/opt/ms-playwright` (owned by `devuser`), `PLAYWRIGHT_BROWSERS_PATH` exported - e2e tests run immediately. If your project pins a different Playwright version, re-run `npx playwright install` (no sudo).
 - **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
-- **Claude** login is shared from the host and skills/instructions are bootstrapped on first start - see [Claude integration](#claude-integration).
+- **Claude** has its own container-local login (not the host's) and skills/instructions are bootstrapped on first start - see [Claude integration](#claude-integration).
 - **SSH keys** are NOT mounted from the host. You hand-carry the one(s) you want via `~/fast_share` - see [SSH keys](#ssh-keys). Once in `~/.ssh/id_*` they are auto-loaded by keychain each shell and persist in the home volume.
 
 ## Common operations
@@ -244,6 +243,5 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 | WebStorm window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
 | `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? There's no ambient DB - are you naming one (`psql -d <db>`)? Does it exist (`createdb <db>`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
-| `docker` fails inside container | `DOCKER_GID` must match `getent group docker \| cut -d: -f3`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |
 | Slow GUI | Expected - rendering is software by default (`LIBGL_ALWAYS_SOFTWARE=1`). For GPU acceleration, add a `devices: ["/dev/dri/renderD128:/dev/dri/renderD128"]` block to `compose.yaml` and unset `LIBGL_ALWAYS_SOFTWARE`. |

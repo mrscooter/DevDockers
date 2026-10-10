@@ -4,8 +4,8 @@ ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Layer 1: Core system packages, editors, X11/DBus/GL + GUI shared libs (for the WebStorm
-# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here), Docker
-# CLI (for DinD via host socket), keychain. One apt layer, cleanup in same RUN to stay lean.
+# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here),
+# keychain. One apt layer, cleanup in same RUN to stay lean.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git make sudo zsh tree jq xclip iproute2 \
         vim nano bat micro less \
@@ -15,7 +15,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 \
         libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libasound2t64 \
         libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libxshmfence1 \
-        docker.io keychain \
+        keychain \
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 2: Tools from official apt repos (Ubuntu's are older/absent) - PostgreSQL
@@ -113,11 +113,10 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo '  print -r -- "  2. in here, run: import-ssh-keys-from-fastshare <name>"'; \
       echo '}'; \
       echo 'unset _keys'; \
-      echo '# Claude login check (non-blocking FYI on shell entry; entrypoint.sh seeds the file from the host).'; \
+      echo '# Claude login check (non-blocking FYI on shell entry; the login is container-local, not the host one).'; \
       echo 'if [[ ! -s ~/.claude/.credentials.json ]]; then'; \
-      echo '  print -r -- "Note: no Claude login present (~/.claude/.credentials.json missing or empty)."'; \
-      echo '  print -r -- "  Share the host login: log into Claude on the HOST (remove any stray dir Docker made at"'; \
-      echo '  print -r -- "  ~/.claude/.credentials.json there), then: docker compose restart. Or run claude here to log in locally."'; \
+      echo '  print -r -- "Note: Claude is not logged in inside this container (separate from the host login)."'; \
+      echo '  print -r -- "  Run claude and log in; the login persists in the home volume."'; \
       echo 'fi'; \
     } >> .zshrc
 
