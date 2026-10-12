@@ -8,25 +8,32 @@ services:
     image: ${IMAGE_NAME:-general-dev-env}
     container_name: ${CONTAINER_NAME:-general-dev}
     # Fixed hostname: the bridge network otherwise assigns the container ID, which changes
-    # on every recreate (keychain keys its agent files by hostname).
+    # on every recreate.
     hostname: ${CONTAINER_NAME:-general-dev}
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    # tini as PID 1: forwards SIGTERM (instant stops instead of a 10 s timeout + kill) and
+    # reaps orphaned processes, e.g. GUI apps started with & from a since-closed shell.
+    init: true
     environment:
       - DISPLAY=${DISPLAY:-:0}
-      - DEV_NAME=${DEV_NAME}
-      - DEV_EMAIL=${DEV_EMAIL}
+      - DEV_NAME=${DEV_NAME:?set DEV_NAME in .env - your git identity, see .env.example}
+      - DEV_EMAIL=${DEV_EMAIL:?set DEV_EMAIL in .env - your git identity, see .env.example}
+      - SSH_AUTH_SOCK=/run/host-ssh-agent/agent.sock
     # Electron apps (Typora) need more than Docker's 64 MB default /dev/shm.
     shm_size: 256m
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - devuser-home:/home/devuser
-      # Host->container file bridge, the only host directory shared. Drop SSH keys you want
-      # to use INSIDE the container here, then run `import-ssh-keys-from-fastshare <name>`
-      # (see README "SSH keys"). FASTSHARE_PATH is required (no default).
+      # Socket dir of this container's host-side ssh-agent, started by
+      # zsh-into-docker-container.sh. The whole dir is mounted, not the socket, so a
+      # restarted agent's new socket shows up.
+      - ${HOME}/.local/state/${CONTAINER_NAME:-general-dev}-ssh:/run/host-ssh-agent
+      # Host->container file bridge, the only host directory with files shared.
+      # FASTSHARE_PATH is required (no default).
       - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
-    # Default bridge network, no published ports: the container has its own network
-    # namespace, so services listening on the host's 127.0.0.1 are unreachable from it,
-    # and nothing inside is reachable from the host. Outbound internet works normally.
+    # Default bridge network, no published ports: services listening on the host's 127.0.0.1
+    # are unreachable from the container. Everything else the host reaches (internet, LAN,
+    # VPN peers, host services on 0.0.0.0) is reachable through NAT - see README.
     # Deliberately no /var/run/docker.sock (root-equivalent on the host).
 
 volumes:

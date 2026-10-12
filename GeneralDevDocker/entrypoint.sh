@@ -14,15 +14,14 @@ git config --global push.autoSetupRemote true
 # --- micro editor defaults ---------------------------------------------------
 # Soft-wrap at the screen edge on word boundaries. Lives in the home volume, which
 # masks anything baked into the image after first creation, so it is set here on
-# every start. Fills missing keys only, leaving any user overrides intact.
+# every start. Fills missing keys only, leaving any user overrides intact. A file that is
+# not strict JSON (micro also accepts comments / trailing commas) is left untouched: the
+# parse error fails the script and the warning below prints.
 python3 - "${HOME}/.config/micro/settings.json" <<'PY' || echo "[micro-defaults] WARNING: could not write micro settings"
 import json, os, sys
 p = sys.argv[1]
 os.makedirs(os.path.dirname(p), exist_ok=True)
-try:
-    d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
-except Exception:
-    d = {}
+d = json.load(open(p)) if (os.path.exists(p) and os.path.getsize(p)) else {}
 changed = False
 for k in ("softwrap", "wordwrap"):
     if k not in d:

@@ -29,14 +29,18 @@ RUN wget -q https://sourceware.org/pub/gcc/releases/gcc-${GCC_VERSION}/gcc-${GCC
 
 FROM ubuntu:26.04
 
+# Fail a RUN when any command in a pipe fails, not just the last one: a `curl | bash`
+# installer whose download failed would otherwise build a layer without the tool.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Layer 1: Core system packages, editors, X11/DBus/GL basics (for GUI apps like Typora),
-# keychain, Python 3.14 (the 26.04 system Python).
+# Python 3.14 (the 26.04 system Python).
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git sudo zsh tree jq xclip iproute2 zip unzip xz-utils \
-        openssh-client keychain \
+        openssh-client \
         vim nano bat micro less \
         dbus dbus-x11 libgl1-mesa-dri libegl-mesa0 adwaita-icon-theme fonts-dejavu \
         python3 python3-venv python3-dev python-is-python3 \
@@ -51,13 +55,15 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 # Layer 3: LLVM 23 (latest stable) from apt.llvm.org - Ubuntu 26.04 ships LLVM 21.
 # /usr/lib/llvm-23/bin on PATH makes the unversioned names (clang, clangd, lld, ...) v23.
+# llvm-23 brings the llvm-* tools: llvm-symbolizer (sanitizer file:line), llvm-cov /
+# llvm-profdata (clang coverage), llvm-ar (LTO), ...
 RUN install -d -m 755 /etc/apt/keyrings && \
     curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         | gpg --dearmor -o /etc/apt/keyrings/llvm.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/llvm.gpg] http://apt.llvm.org/resolute/ llvm-toolchain-resolute-23 main" \
         > /etc/apt/sources.list.d/llvm.list && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        clang-23 clangd-23 clang-format-23 clang-tidy-23 clang-tools-23 lld-23 lldb-23 \
+        clang-23 clangd-23 clang-format-23 clang-tidy-23 clang-tools-23 lld-23 lldb-23 llvm-23 \
         libc++-23-dev libc++abi-23-dev libclang-rt-23-dev && \
     rm -rf /var/lib/apt/lists/*
 ENV PATH="/usr/lib/llvm-23/bin:${PATH}"
@@ -133,22 +139,17 @@ ENV VCPKG_ROOT=/opt/vcpkg \
 RUN dbus-uuidgen > /etc/machine-id && \
     ln -sf /etc/machine-id /var/lib/dbus/machine-id
 
-# Claude Code managed settings: root-owned, so neither Claude nor user/project settings can
-# override them. Denies Claude's file tools on ~/.ssh - a guard against accidental reads,
-# not a hard boundary (see README "Claude Code"). The dir is created first because
-# COPY --chmod would apply 644 to an implicitly created parent too, making it untraversable.
+# Claude Code managed settings: root-owned, so user/project settings cannot override them
+# (root can, and devuser has passwordless sudo). Denies Claude's file tools on ~/.ssh - a
+# guard against accidental reads of a key put there by hand, not a hard boundary (see
+# README "Claude Code"). The dir is created first because COPY --chmod would apply 644
+# to an implicitly created parent too, making it untraversable.
 RUN install -d -m 755 /etc/claude-code
 COPY --chmod=644 claude-managed-settings.json /etc/claude-code/managed-settings.json
 
-USER devuser
-WORKDIR /home/devuser
-
-# Layer 11: oh-my-zsh, plugins, .zshrc.
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
-    git clone https://github.com/zsh-users/zsh-autosuggestions .oh-my-zsh/custom/plugins/zsh-autosuggestions && \
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting .oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
-    sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc && \
-    { \
+# Layer 11: shell setup in the system-wide /etc/zsh/zshrc (sourced before ~/.zshrc), not
+# in the home volume, so image rebuilds reach existing volumes too.
+RUN { \
       echo ''; \
       echo '# --- GeneralDevDocker additions ---'; \
       echo 'export NO_AT_BRIDGE=1'; \
@@ -160,24 +161,22 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo "alias bat='batcat'"; \
       echo 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"'; \
       echo 'mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null && chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null'; \
-      echo '_keys=(~/.ssh/id_*(N)); _keys=(${_keys:#*.pub})'; \
-      echo '(( ${#_keys[@]} )) && eval "$(keychain --eval --quiet "${_keys[@]}" 2>/dev/null)"'; \
-      echo '(( ${#_keys[@]} )) || {'; \
-      echo '  print -r -- "No SSH key in ~/.ssh. Either:"'; \
-      echo '  print -r -- "  - generate a dedicated key for this container:  generate-ssh-key"'; \
-      echo '  print -r -- "  - or import one from the host via ~/fast_share:  import-ssh-keys-from-fastshare <name>"'; \
-      echo '}'; \
-      echo 'unset _keys'; \
-    } >> .zshrc
+    } >> /etc/zsh/zshrc
 
-# Layer 12: Claude Code CLI (native installer, in the home volume so self-updates persist).
+USER devuser
+WORKDIR /home/devuser
+
+# Layer 12: oh-my-zsh, plugins.
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
+    git clone https://github.com/zsh-users/zsh-autosuggestions .oh-my-zsh/custom/plugins/zsh-autosuggestions && \
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting .oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
+    sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc
+
+# Layer 13: Claude Code CLI (native installer, in the home volume so self-updates persist).
 # Login and configuration are done by the user inside the container.
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="/home/devuser/.local/bin:/home/devuser/.claude/local/bin:${PATH}"
-
-COPY generate-ssh-key.sh /usr/local/bin/generate-ssh-key
-COPY import-ssh-keys-from-fastshare.sh /usr/local/bin/import-ssh-keys-from-fastshare
 
 # Entrypoint applies git identity + editor defaults on every container start (so .env
 # changes take effect without rebuilding the image or wiping the home volume).

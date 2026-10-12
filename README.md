@@ -10,7 +10,7 @@ One image per stack on purpose - not a single mega-image. A web project should n
 |---|---|
 | [`FullStackWebDevDocker/`](FullStackWebDevDocker/) | Web stack: WebStorm + Python 3.12/uv + Node 20 + Playwright. Serves any Python-backend + Node-frontend + Postgres project. |
 | [`shared-db/`](shared-db/) | One shared PostgreSQL 16, used by all web dev-dockers. |
-| [`GeneralDevDocker/`](GeneralDevDocker/) | General Linux box for Python + C/C++ experiments: GCC 16 + Clang 23 + Python 3.14/uv, no IDE. Stricter isolation (no docker.sock, bridge network, own SSH key and Claude login). Standalone - no shared-db. |
+| [`GeneralDevDocker/`](GeneralDevDocker/) | General Linux box for Python + C/C++ experiments: GCC 16 + Clang 23 + Python 3.14/uv, no IDE. Stricter isolation (no docker.sock, bridge network, SSH keys only via a host-side agent, own Claude login). Standalone - no shared-db. |
 
 ## shared-db
 

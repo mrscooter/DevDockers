@@ -8,10 +8,14 @@ services:
     image: ${IMAGE_NAME:-fullstack-web-dev-env}
     container_name: ${CONTAINER_NAME:-fullstack-web-dev}
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    # tini as PID 1: forwards SIGTERM (instant stops instead of a 10 s timeout + kill) and
+    # reaps orphaned processes, e.g. GUI apps started with & from a since-closed shell.
+    init: true
     environment:
       - DISPLAY=${DISPLAY:-:0}
-      - DEV_NAME=${DEV_NAME}
-      - DEV_EMAIL=${DEV_EMAIL}
+      - DEV_NAME=${DEV_NAME:?set DEV_NAME in .env - your git identity, see .env.example}
+      - DEV_EMAIL=${DEV_EMAIL:?set DEV_EMAIL in .env - your git identity, see .env.example}
+      - SSH_AUTH_SOCK=/run/host-ssh-agent/agent.sock
       # Shared Postgres CONNECTION params only (must match the ../shared-db project).
       # Deliberately no PGDATABASE: the database is never ambient, so nothing connects
       # to a shared default by accident - pick it explicitly (psql -d, or app config).
@@ -34,10 +38,11 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - devuser-home:/home/devuser
-      # Host->container file bridge. Drop SSH keys you want to use INSIDE the
-      # container here, then run `import-ssh-keys-from-fastshare <name>` (see README
-      # "SSH keys"). Nothing here is auto-trusted; company keys stay out unless you
-      # deliberately put them in. FASTSHARE_PATH is required (no default).
+      # Socket dir of this container's host-side ssh-agent, started by
+      # zsh-into-docker-container.sh. The whole dir is mounted, not the socket, so a
+      # restarted agent's new socket shows up.
+      - ${HOME}/.local/state/${CONTAINER_NAME:-fullstack-web-dev}-ssh:/run/host-ssh-agent
+      # Host->container file bridge. FASTSHARE_PATH is required (no default).
       - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
     # Host networking: the container shares the host's network stack, so any dev
     # server you launch (Django, Vite, ...) is reachable on the host at the same
