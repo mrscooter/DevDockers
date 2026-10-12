@@ -1,13 +1,18 @@
 FROM ubuntu:24.04
 
+# Fail a RUN when any command in a pipe fails, not just the last one: a `curl | bash`
+# installer whose download failed would otherwise build a layer without the tool.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
 # Layer 1: Core system packages, editors, X11/DBus/GL + GUI shared libs (for the WebStorm
-# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here),
-# keychain. One apt layer, cleanup in same RUN to stay lean.
+# GUI; Playwright's full browser deps come via --with-deps in layer 7, not here).
+# One apt layer, cleanup in same RUN to stay lean.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl wget gnupg git make sudo zsh tree jq xclip iproute2 \
+        openssh-client \
         vim nano bat micro less \
         python3 python3-venv \
         dbus dbus-x11 libgl1-mesa-dri libegl-mesa0 adwaita-icon-theme \
@@ -15,7 +20,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 \
         libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libasound2t64 \
         libpangocairo-1.0-0 libpango-1.0-0 libcairo2 libxshmfence1 \
-        keychain \
     && rm -rf /var/lib/apt/lists/*
 
 # Layer 2: Tools from official apt repos (Ubuntu's are older/absent) - PostgreSQL
@@ -84,15 +88,9 @@ RUN npx --yes playwright@1.60.0 install --with-deps chromium firefox webkit && \
     chown -R $USER_ID:$GROUP_ID /opt/ms-playwright && \
     rm -rf /var/lib/apt/lists/*
 
-USER devuser
-WORKDIR /home/devuser
-
-# Layer 8: oh-my-zsh, plugins, .zshrc.
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
-    git clone https://github.com/zsh-users/zsh-autosuggestions .oh-my-zsh/custom/plugins/zsh-autosuggestions && \
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting .oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
-    sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc && \
-    { \
+# Layer 8: shell setup in the system-wide /etc/zsh/zshrc (sourced before ~/.zshrc), not
+# in the home volume, so image rebuilds reach existing volumes too.
+RUN { \
       echo ''; \
       echo '# --- FullStackWebDevDocker additions ---'; \
       echo 'export NO_AT_BRIDGE=1'; \
@@ -105,31 +103,29 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
       echo "alias bat='batcat'"; \
       echo 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"'; \
       echo 'mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null && chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null'; \
-      echo '_keys=(~/.ssh/id_*(N))'; \
-      echo '(( ${#_keys[@]} )) && eval "$(keychain --eval --quiet "${_keys[@]}" 2>/dev/null)"'; \
-      echo '(( ${#_keys[@]} )) || {'; \
-      echo '  print -r -- "No SSH key in ~/.ssh. To use one inside this container:"'; \
-      echo '  print -r -- "  1. on the host, drop the private key into the fast_share dir (here: ~/fast_share)"'; \
-      echo '  print -r -- "  2. in here, run: import-ssh-keys-from-fastshare <name>"'; \
-      echo '}'; \
-      echo 'unset _keys'; \
       echo '# Claude login check (non-blocking FYI on shell entry; the login is container-local, not the host one).'; \
       echo 'if [[ ! -s ~/.claude/.credentials.json ]]; then'; \
       echo '  print -r -- "Note: Claude is not logged in inside this container (separate from the host login)."'; \
       echo '  print -r -- "  Run claude and log in; the login persists in the home volume."'; \
       echo 'fi'; \
-    } >> .zshrc
+    } >> /etc/zsh/zshrc
 
-# Layer 9: uv (Astral) - fast Python package/venv manager for the backend.
+USER devuser
+WORKDIR /home/devuser
+
+# Layer 9: oh-my-zsh, plugins.
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
+    git clone https://github.com/zsh-users/zsh-autosuggestions .oh-my-zsh/custom/plugins/zsh-autosuggestions && \
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting .oh-my-zsh/custom/plugins/zsh-syntax-highlighting && \
+    sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc
+
+# Layer 10: uv (Astral) - fast Python package/venv manager for the backend.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Layer 10: Claude Code CLI.
+# Layer 11: Claude Code CLI.
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="/home/devuser/.local/bin:/home/devuser/.claude/local/bin:${PATH}"
-
-# Helper to bring a hand-carried SSH key from ~/fast_share into ~/.ssh (see README).
-COPY import-ssh-keys-from-fastshare.sh /usr/local/bin/import-ssh-keys-from-fastshare
 
 # Entrypoint applies git identity + the Claude bootstrap on every container start (so
 # .env changes take effect without rebuilding the image or wiping the home volume).

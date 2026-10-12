@@ -21,7 +21,7 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 | Backend | Python 3.12 + `uv` (Astral) |
 | Frontend | Node.js 20 + npm, Playwright browsers pre-baked |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
-| Shell / tools | zsh + Oh My Zsh + keychain, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
+| Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
 
@@ -64,7 +64,7 @@ Edit `.env` and set (the file documents every variable):
 | `DEV_NAME` / `DEV_EMAIL` | your git identity (used inside the container) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
 | `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
-| `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` - see [SSH keys](#ssh-keys) |
+| `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` |
 
 Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude skills work out of the box; the Claude login is separate from the host's, so you log in once inside the container - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
 
@@ -87,12 +87,12 @@ docker compose build          # first build ~10-15 min (WebStorm, Playwright, ap
 docker compose ps             # dev-env should be Up
 ```
 
-`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the WebStorm GUI can open windows (warning loudly, but still starting, if there is no display to reach), then starts the container in the background. Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --build` or `./up.sh --force-recreate` (after editing `.env`).
+`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the WebStorm GUI can open windows (warning loudly, but still starting, if there is no display to reach) and creates the ssh-agent socket and SSH key dirs (see [SSH keys](#ssh-keys)), then starts the container in the background. Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --build` or `./up.sh --force-recreate` (after editing `.env`).
 
 ### 5. Get a shell inside
 
 ```bash
-./zsh-into-docker-container.sh
+./zsh-into-docker-container.sh    # first run after a reboot asks for the SSH key passphrases
 ```
 
 Everything below runs inside the container.
@@ -106,7 +106,7 @@ mkdir -p ~/code && cd ~/code
 git clone <your-project-url> <project>
 ```
 
-Cloning a private repo over SSH? Import your key first, or this fails with `permission denied (publickey)` - see [SSH keys](#ssh-keys).
+Cloning a private repo over SSH? Put your key into `~/.ssh/fullstack-web-dev/` on the host first, or this fails with `permission denied (publickey)` - see [SSH keys](#ssh-keys).
 
 (Alternative Mode B mounts a host checkout instead - see [Providing your project](#providing-your-project-mode-a-vs-mode-b).)
 
@@ -180,17 +180,16 @@ The bootstrap is configurable in `.env` (`CLAUDE_BOOTSTRAP`, `CLAUDE_BOOTSTRAP_F
 
 ## SSH keys
 
-The host `~/.ssh` is deliberately **not** mounted, so unrelated keys (e.g. company keys) never leak into a container you may run AI agents inside. Instead you hand-carry only the key(s) you want, through the `~/fast_share` bridge (`FASTSHARE_PATH` on the host):
+The host `~/.ssh` is deliberately **not** mounted, and no private key ever enters the container, so unrelated keys (e.g. company keys) never reach a container you may run AI agents inside. `./zsh-into-docker-container.sh` runs a dedicated ssh-agent on the host, one per container (socket in `~/.local/state/<CONTAINER_NAME>-ssh/`), loads every key from the dedicated host directory `~/.ssh/<CONTAINER_NAME>/` into it (`SSH_KEY_DIR` in `.env` to change), and the container gets only the agent's socket (`SSH_AUTH_SOCK`). `git` / `ssh` inside authenticate through it, but there is no key file to read, not even with sudo.
+
+`./up.sh` creates that directory and, while it holds no key, says so with its full path. Put the key(s) the container may use there (`fullstack-web-dev` is the default `CONTAINER_NAME`), each with its `.pub` next to it:
 
 ```bash
-# on the host: put the key on the bridge
-cp ~/.ssh/id_ed25519 "$FASTSHARE_PATH"/
-
-# inside the container: import it (sets perms; lists candidates if run bare)
-import-ssh-keys-from-fastshare id_ed25519
+cp -p ~/.ssh/id_ed25519{,.pub} ~/.ssh/fullstack-web-dev/          # an existing key, or ssh-keygen a dedicated one there
+sudo chown root:root ~/.ssh/fullstack-web-dev/id_ed25519          # optional: unreadable for your user (Claude on the host); keep the dir and .pub yours
 ```
 
-The key is copied into the container-private `~/.ssh` (chmod 600) and persists in the home volume. keychain auto-loads `~/.ssh/id_*` on each new zsh session; until a key is present, a shell prints a one-time reminder pointing at this flow. You can then delete the copy from `fast_share` if you do not want it lingering on the bridge.
+The first `./zsh-into-docker-container.sh` after a reboot asks on the host for each key's passphrase (plus your sudo password for a root-owned key); later runs reuse the agent. It is separate from your desktop's agent, so the container sees only the keys in that directory. Until reboot, the unlocked keys are usable, not readable, by everything in the container, Claude included (e.g. `git push`), and by any host process of your user that uses that socket.
 
 ## Providing your project (Mode A vs Mode B)
 
@@ -208,22 +207,23 @@ Several worktrees at once, each its own dev-docker, all sharing `../shared-db`:
 
 ```bash
 cp -r FullStackWebDevDocker FullStackWebDevDocker-wtB
-# in -wtB/.env:  POSTGRES_DB=app_b   CONTAINER_NAME=fullstack-web-dev-wtB
+# in -wtB/.env:  POSTGRES_DB=app_b   CONTAINER_NAME=fullstack-web-dev-wtB   SSH_KEY_DIR=~/.ssh/fullstack-web-dev
 cd FullStackWebDevDocker-wtB
-docker compose -p fswdd-wtB up -d
+./up.sh                        # the copied directory's name keeps it a separate compose project
 ```
 
-Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy), and the bootstrap runs once per volume; give each its own `FASTSHARE_PATH` if you want separate bridges.
+Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy), and the bootstrap runs once per volume; give each its own `FASTSHARE_PATH` if you want separate bridges. Each also gets its own host ssh-agent; `SSH_KEY_DIR` above shares the original's keys, leave it out to use `~/.ssh/<CONTAINER_NAME>/` instead.
 
 ## How it is wired
 
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
-- **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, `~/.ssh`, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB).
+- **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB). Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so the image's own shell setup lives in `/etc/zsh/zshrc`, which rebuilds do update.
 - **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
 - **Playwright** browsers are baked at `/opt/ms-playwright` (owned by `devuser`), `PLAYWRIGHT_BROWSERS_PATH` exported - e2e tests run immediately. If your project pins a different Playwright version, re-run `npx playwright install` (no sudo).
 - **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
 - **Claude** has its own container-local login (not the host's) and skills/instructions are bootstrapped on first start - see [Claude integration](#claude-integration).
-- **SSH keys** are NOT mounted from the host. You hand-carry the one(s) you want via `~/fast_share` - see [SSH keys](#ssh-keys). Once in `~/.ssh/id_*` they are auto-loaded by keychain each shell and persist in the home volume.
+- **SSH keys** never enter the container: it uses a per-container host-side ssh-agent through a mounted socket - see [SSH keys](#ssh-keys).
+- **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so WebStorm and other GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`.
 
 ## Common operations
 
@@ -244,4 +244,6 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 | `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? There's no ambient DB - are you naming one (`psql -d <db>`)? Does it exist (`createdb <db>`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |
+| `git push` over SSH: `permission denied (publickey)` | `ssh-add -l` inside lists the loaded keys. None / `Error connecting to agent`: no key with its `.pub` in `~/.ssh/<CONTAINER_NAME>/`, or no shell opened via `./zsh-into-docker-container.sh` since the last reboot. Key listed: its public key is not registered on the remote. |
+| `bind: Permission denied` from ssh-agent | A plain `docker compose up` created `~/.local/state/<CONTAINER_NAME>-ssh` root-owned: `sudo chown $USER: ~/.local/state/<CONTAINER_NAME>-ssh`, then start via `./up.sh`. |
 | Slow GUI | Expected - rendering is software by default (`LIBGL_ALWAYS_SOFTWARE=1`). For GPU acceleration, add a `devices: ["/dev/dri/renderD128:/dev/dri/renderD128"]` block to `compose.yaml` and unset `LIBGL_ALWAYS_SOFTWARE`. |
