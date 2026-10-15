@@ -30,7 +30,7 @@ services:
       - ${HOME}/.local/state/${CONTAINER_NAME:-general-dev}-ssh:/run/host-ssh-agent
       # Host->container file bridge, the only host directory with files shared.
       # FASTSHARE_PATH is required (no default).
-      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
+      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
     # Default bridge network, no published ports: services listening on the host's 127.0.0.1
     # are unreachable from the container. Everything else the host reaches (internet, LAN,
     # VPN peers, host services on 0.0.0.0) is reachable through NAT - see README.
