@@ -33,10 +33,10 @@ Steps 0-4 are on the **host**, run from this directory (`GeneralDevDocker/`); fr
 cp .env.example .env
 ```
 
-Set `DEV_NAME` / `DEV_EMAIL` (your git identity inside the container), `FASTSHARE_PATH` (absolute host dir for the `~/fast_share` bridge) and, if needed, `SSH_KEY_DIR` (see "SSH keys"). The file documents every variable. Then create that directory on the host, before the first start (otherwise Docker creates a root-owned, unwritable one):
+Set `DEV_NAME` / `DEV_EMAIL` (your git identity inside the container), `FASTSHARE_PATH` (host dir for the `~/fast_share` bridge: absolute, `~/...`, or `./`-relative to this directory; a bare name without `./` is treated as a Docker volume) and, if needed, `SSH_KEY_DIR` (see "SSH keys"). The file documents every variable. Then create that directory on the host, before the first start (otherwise Docker creates a root-owned, unwritable one):
 
 ```bash
-mkdir -p ~/fast_share_gdd       # set FASTSHARE_PATH in .env to this absolute path
+mkdir -p ~/fast_share_gdd       # then set FASTSHARE_PATH=~/fast_share_gdd in .env
 ```
 
 ### 2. Build the image
