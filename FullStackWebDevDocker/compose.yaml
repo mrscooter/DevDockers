@@ -43,7 +43,7 @@ services:
       # restarted agent's new socket shows up.
       - ${HOME}/.local/state/${CONTAINER_NAME:-fullstack-web-dev}-ssh:/run/host-ssh-agent
       # Host->container file bridge. FASTSHARE_PATH is required (no default).
-      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - absolute host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
+      - ${FASTSHARE_PATH:?set FASTSHARE_PATH in .env - host dir for the ~/fast_share bridge, see .env.example}:/home/devuser/fast_share
     # Host networking: the container shares the host's network stack, so any dev
     # server you launch (Django, Vite, ...) is reachable on the host at the same
     # port with no mapping, and the shared Postgres is reached at

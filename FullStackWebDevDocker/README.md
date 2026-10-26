@@ -64,14 +64,14 @@ Edit `.env` and set (the file documents every variable):
 | `DEV_NAME` / `DEV_EMAIL` | your git identity (used inside the container) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `PG_HOST_PORT` | **must match `../shared-db/.env`** |
 | `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
-| `FASTSHARE_PATH` | absolute host dir (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` |
+| `FASTSHARE_PATH` | host dir: absolute, `~/...`, or `./`-relative to this directory; a bare name without `./` is a Docker volume (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` |
 
 Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude skills work out of the box; the Claude login is separate from the host's, so you log in once inside the container - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
 
 Then create the `FASTSHARE_PATH` directory on the host (it must exist before you start the container, or the bind-mount creates a root-owned, unwritable one):
 
 ```bash
-mkdir -p ~/fast_share_fswdd       # set FASTSHARE_PATH in .env to this absolute path
+mkdir -p ~/fast_share_fswdd       # then set FASTSHARE_PATH=~/fast_share_fswdd in .env
 ```
 
 ### 3. Build the image
