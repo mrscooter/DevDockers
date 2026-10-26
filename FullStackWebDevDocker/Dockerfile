@@ -108,6 +108,13 @@ RUN { \
       echo '  print -r -- "Note: Claude is not logged in inside this container (separate from the host login)."'; \
       echo '  print -r -- "  Run claude and log in; the login persists in the home volume."'; \
       echo 'fi'; \
+      echo '# Optional PROMPT_PREFIX (.env): prepended once, before the first prompt, because the'; \
+      echo '# oh-my-zsh theme in ~/.zshrc sets PROMPT only after this file has run.'; \
+      echo 'if [[ -n "$PROMPT_PREFIX" ]]; then'; \
+      echo '  autoload -Uz add-zsh-hook'; \
+      echo '  _prompt_prefix() { PROMPT="$PROMPT_PREFIX $PROMPT"; add-zsh-hook -d precmd _prompt_prefix; }'; \
+      echo '  add-zsh-hook precmd _prompt_prefix'; \
+      echo 'fi'; \
     } >> /etc/zsh/zshrc
 
 USER devuser

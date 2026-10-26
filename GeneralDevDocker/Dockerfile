@@ -161,6 +161,13 @@ RUN { \
       echo "alias bat='batcat'"; \
       echo 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"'; \
       echo 'mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null && chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null'; \
+      echo '# Optional PROMPT_PREFIX (.env): prepended once, before the first prompt, because the'; \
+      echo '# oh-my-zsh theme in ~/.zshrc sets PROMPT only after this file has run.'; \
+      echo 'if [[ -n "$PROMPT_PREFIX" ]]; then'; \
+      echo '  autoload -Uz add-zsh-hook'; \
+      echo '  _prompt_prefix() { PROMPT="$PROMPT_PREFIX $PROMPT"; add-zsh-hook -d precmd _prompt_prefix; }'; \
+      echo '  add-zsh-hook precmd _prompt_prefix'; \
+      echo 'fi'; \
     } >> /etc/zsh/zshrc
 
 USER devuser
