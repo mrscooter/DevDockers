@@ -13,6 +13,7 @@ services:
     init: true
     environment:
       - DISPLAY=${DISPLAY:-:0}
+      - PROMPT_PREFIX=${PROMPT_PREFIX:-}
       - DEV_NAME=${DEV_NAME:?set DEV_NAME in .env - your git identity, see .env.example}
       - DEV_EMAIL=${DEV_EMAIL:?set DEV_EMAIL in .env - your git identity, see .env.example}
       - SSH_AUTH_SOCK=/run/host-ssh-agent/agent.sock
