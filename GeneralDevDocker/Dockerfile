@@ -33,6 +33,10 @@ FROM ubuntu:26.04
 # installer whose download failed would otherwise build a layer without the tool.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# UTF-8 locale: without it zsh measures non-ASCII prompt glyphs (e.g. a nerd-font
+# PROMPT_PREFIX) in bytes, misplaces the cursor on redraw and leaves stale text.
+ENV LANG=C.UTF-8
+
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
