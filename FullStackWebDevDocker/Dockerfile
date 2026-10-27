@@ -50,8 +50,8 @@ RUN curl -fsSL -o /tmp/typora.deb \
     rm -f /tmp/typora.deb && \
     rm -rf /var/lib/apt/lists/*
 
-# Layer 3: Node.js 20 (NodeSource). Bump here if a project needs a newer line.
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+# Layer 3: Node.js 24 (NodeSource, latest 24.x). Bump here if a project needs a newer line.
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 

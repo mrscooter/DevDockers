@@ -19,7 +19,7 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 |---|---|
 | OS / IDE | Ubuntu 24.04, WebStorm 2026.1.2 (GUI via X11 to your host) |
 | Backend | Python 3.12 + `uv` (Astral) |
-| Frontend | Node.js 20 + npm, Playwright browsers pre-baked |
+| Frontend | Node.js 24 + npm, Playwright browsers pre-baked |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
 
