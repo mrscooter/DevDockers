@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 # Grant X access (loud preflight; non-fatal if no display - the container is still
 # useful for CLI work), then start the container detached. Extra args pass through
-# to `docker compose up`, e.g.  ./up.sh --build  or  ./up.sh --force-recreate.
+# to `docker compose up`, e.g.  ./up.sh --force-recreate.
 ./xhost-setup.sh || echo "WARNING: continuing without X access - GUI apps in the container won't open until a display is available." >&2
 
 # This container's ssh-agent socket dir and SSH key dir (see ssh-agent-paths.sh). The
@@ -14,7 +14,10 @@ cd "$(dirname "$0")"
 . ./ssh-agent-paths.sh
 mkdir -p -m 700 "${ssh_sock_dir}" "${ssh_key_dir}"
 
-docker compose up -d "$@"
+# Always --build: compose never notices an image that is older than the Dockerfile, so
+# without it a pulled Dockerfile change silently never reaches the container. With
+# nothing changed, every layer comes from cache and the container is left running.
+docker compose up -d --build "$@"
 
 if [ -z "$(ssh_keys)" ]; then
   echo

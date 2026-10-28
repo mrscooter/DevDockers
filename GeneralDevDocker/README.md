@@ -51,7 +51,7 @@ docker compose build          # first build is long: GCC is compiled from source
 ./up.sh                       # grants X access for GUI apps, then starts detached
 ```
 
-`./up.sh` wraps `docker compose up -d` and passes extra args through, e.g. `./up.sh --build --force-recreate` after a Dockerfile change (without `--force-recreate`, compose was seen to keep the old container running on the old image).
+`./up.sh` wraps `docker compose up -d --build`: the image is rebuilt from cache on every start, so Dockerfile changes always reach the container (nothing changed = a few seconds, container left running). Extra args pass through, e.g. `./up.sh --force-recreate` if compose ever keeps the old container on the old image.
 
 ### 4. Get a shell inside
 
@@ -117,7 +117,7 @@ Claude can use the SSH keys loaded in the host agent, e.g. for `git push`. This 
 |--------|---------|
 | Shell in | `./zsh-into-docker-container.sh` |
 | Status / logs | `docker compose ps` / `docker compose logs -f dev-env` |
-| Rebuild + restart | `./up.sh --build --force-recreate` (`docker compose build --no-cache` for a clean rebuild) |
+| Rebuild + restart | `./up.sh` (rebuilds from cache; `docker compose build --no-cache` for a clean rebuild) |
 | Stop, keep state | `docker compose down` |
 | Stop, wipe home volume (keys, Claude login, code) | `docker compose down -v` |
 
