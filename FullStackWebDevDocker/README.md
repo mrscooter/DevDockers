@@ -87,7 +87,7 @@ docker compose build          # first build ~10-15 min (WebStorm, Playwright, ap
 docker compose ps             # dev-env should be Up
 ```
 
-`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the WebStorm GUI can open windows (warning loudly, but still starting, if there is no display to reach) and creates the ssh-agent socket and SSH key dirs (see [SSH keys](#ssh-keys)), then starts the container in the background. Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --build` or `./up.sh --force-recreate` (after editing `.env`).
+`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the WebStorm GUI can open windows (warning loudly, but still starting, if there is no display to reach) and creates the ssh-agent socket and SSH key dirs (see [SSH keys](#ssh-keys)), then starts the container in the background with `--build`, so Dockerfile changes always reach the container (the image is rebuilt from cache; nothing changed = a few seconds, container left running). Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --force-recreate`.
 
 ### 5. Get a shell inside
 
@@ -231,7 +231,7 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 |--------|---------|
 | Shell in | `./zsh-into-docker-container.sh` |
 | Status / logs | `docker compose ps` / `docker compose logs -f dev-env` |
-| Rebuild | `docker compose build` (`--no-cache` for a clean rebuild) |
+| Rebuild + restart | `./up.sh` (rebuilds from cache; `docker compose build --no-cache` for a clean rebuild) |
 | Stop, keep state | `docker compose down` |
 | Stop, wipe this dev-docker | `docker compose down -v` (shared DB untouched) |
 | Shared DB shell | `docker compose -f ../shared-db/compose.yaml exec postgres psql -U admin` |
