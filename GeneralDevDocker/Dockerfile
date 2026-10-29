@@ -184,13 +184,14 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
     sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' .zshrc
 
 # Layer 13: Claude Code CLI (native installer, in the home volume so self-updates persist).
-# Login and configuration are done by the user inside the container.
+# Login is done by the user inside the container; the config by the entrypoint.
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="/home/devuser/.local/bin:/home/devuser/.claude/local/bin:${PATH}"
 
-# Entrypoint applies git identity + editor defaults on every container start (so .env
-# changes take effect without rebuilding the image or wiping the home volume).
+# Entrypoint applies git identity, the Claude bootstrap and editor defaults on every
+# container start (so .env changes take effect without rebuilding the image or wiping
+# the home volume).
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]

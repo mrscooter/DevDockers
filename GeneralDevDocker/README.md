@@ -92,7 +92,9 @@ The first `./zsh-into-docker-container.sh` after a reboot asks on the host for e
 
 ## Claude Code
 
-The CLI is installed in the image, but nothing is shared with the host's Claude Code: no credentials, no settings. Log in inside (`claude`) with any account, and configure it as you like; everything lives in the home volume and survives rebuilds. The CLI updates itself there too.
+The CLI is installed in the image, but nothing is shared with the host's Claude Code: no credentials, no settings. Log in inside (`claude`) with any account; everything lives in the home volume and survives rebuilds. The CLI updates itself there too.
+
+The personal config comes from the public utils repo, not the host. `entrypoint.sh` clones it to `~/Tools/nicnajder-general-utils` (first start only) and runs its `install.sh --yes claude` on every start: `~/.claude/CLAUDE.md` with the general rules, a container-local `~/.claude/LOCAL-CLAUDE.md` for this box's own rules, the status line, and the `ncn` plugin with the skills. The installer is idempotent; `--yes` replaces whatever is in its way without asking (moved to the clone's `backups/`). The installed files are symlinks into the clone, so edits there apply live; `git pull` in the clone to get new commits. Configurable in `.env` (`CLAUDE_BOOTSTRAP`, `CLAUDE_UTILS_REPO`, `CLAUDE_UTILS_DIR`); `CLAUDE_BOOTSTRAP=false` skips it.
 
 The image ships a root-owned `/etc/claude-code/managed-settings.json` that denies Claude's `Read` / `Edit` on `~/.ssh/**`, in case a key is ever put there by hand (keys normally stay on the host, see "SSH keys"). User and project settings cannot override managed settings, but root can, and devuser (so Claude too) has passwordless sudo. It is a guard against **accidental** reads (e.g. a key ending up in a transcript), not a hard boundary: Claude Code enforces it for its own file tools and for Bash commands it recognizes (`cat`, `head`, ...), but not for arbitrary programs, e.g. a Python script reading the file.
 

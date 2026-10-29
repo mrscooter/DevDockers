@@ -20,6 +20,13 @@ services:
       - DEV_NAME=${DEV_NAME:?set DEV_NAME in .env - your git identity, see .env.example}
       - DEV_EMAIL=${DEV_EMAIL:?set DEV_EMAIL in .env - your git identity, see .env.example}
       - SSH_AUTH_SOCK=/run/host-ssh-agent/agent.sock
+      # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
+      # home volume and runs its install.sh claude. The Claude LOGIN is deliberately
+      # not shared from the host: log in inside the container (it persists in the
+      # home volume).
+      - CLAUDE_BOOTSTRAP=${CLAUDE_BOOTSTRAP:-true}
+      - CLAUDE_UTILS_REPO=${CLAUDE_UTILS_REPO:-https://github.com/mrscooter/nicnajder-general-utils.git}
+      - CLAUDE_UTILS_DIR=${CLAUDE_UTILS_DIR:-/home/devuser/Tools/nicnajder-general-utils}
     # Electron apps (Typora) need more than Docker's 64 MB default /dev/shm.
     shm_size: 256m
     volumes:
