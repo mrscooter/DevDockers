@@ -2,6 +2,9 @@ services:
   dev-env:
     build:
       context: .
+      # Files shared by the dev dockers' images (entrypoint.sh), see the Dockerfile.
+      additional_contexts:
+        shared: ../shared-scripts
       args:
         - USER_ID=${USER_ID:-1000}
         - GROUP_ID=${GROUP_ID:-1000}
@@ -20,7 +23,8 @@ services:
       - DEV_NAME=${DEV_NAME:?set DEV_NAME in .env - your git identity, see .env.example}
       - DEV_EMAIL=${DEV_EMAIL:?set DEV_EMAIL in .env - your git identity, see .env.example}
       - SSH_AUTH_SOCK=/run/host-ssh-agent/agent.sock
-    # Electron apps (Typora) need more than Docker's 64 MB default /dev/shm.
+    # Chromium/Electron-based GUI apps and Python multiprocessing need more than Docker's
+    # 64 MB default /dev/shm.
     shm_size: 256m
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix

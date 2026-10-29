@@ -6,9 +6,9 @@ A throwaway, containerized Linux box for **Python and C/C++ experiments**. No ID
 |---|---|
 | OS | Ubuntu 26.04 LTS |
 | C/C++ compilers | GCC 16.2 (built from source, default `gcc`/`g++`), GCC 15 (`gcc-15`/`g++-15`), LLVM/Clang 23 (apt.llvm.org) incl. libc++, lld, lldb, clangd, clang-format, clang-tidy, sanitizers |
-| C/C++ tooling | CMake 4.2, Ninja, Meson, Autotools, pkg-config, ccache, mold, gdb, valgrind, strace, ltrace, cppcheck, bear, doxygen + graphviz, conan, vcpkg (`/opt/vcpkg`) |
+| C/C++ tooling | CMake 4.2, Ninja, Meson, Autotools, pkg-config, ccache, mold, gdb, valgrind, strace, ltrace, cppcheck, bear, doxygen + graphviz; conan and vcpkg per user (see [Compilers](#compilers)) |
 | Python | Python 3.14 (+ venv, dev headers; `python` = `python3`), `uv` |
-| GUI | Typora (X11) |
+| GUI | X11 forwarding and the GUI libs VS Code and JetBrains IDEs need, for apps you install into your home (none preinstalled) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
@@ -73,7 +73,7 @@ claude                        # log in with whichever Claude account you want he
 - C++26: `g++ -std=c++26` (GCC 16 defaults to C++20). Reflection additionally needs `-freflection`, contracts `-fcontracts`; both are experimental in GCC 16 and not available in Clang 23 (no `<meta>`, no `pre`/`post`).
 - Clang uses the system's GCC 15 libstdc++ by default. For newer library features use `clang++ -stdlib=libc++`, or point it at GCC 16's libstdc++ with `--gcc-install-dir=/opt/gcc-16/lib/gcc/x86_64-linux-gnu/16.2.0`.
 - Binaries built by GCC 16 find its newer `libstdc++` at runtime via `/etc/ld.so.conf.d/gcc-16.conf`; no `LD_LIBRARY_PATH` needed.
-- `vcpkg` lives in `/opt/vcpkg` (owned by devuser, `VCPKG_ROOT` set): update with `git -C /opt/vcpkg pull`. `conan` is image-managed: upgrade by rebuilding the image.
+- `vcpkg` and `conan` are not in the image: install them per user into the home volume, where they survive rebuilds and update without one. vcpkg: `git clone https://github.com/microsoft/vcpkg.git ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics`, then add `export VCPKG_ROOT="$HOME/vcpkg" PATH="$HOME/vcpkg:$PATH"` to `~/.zshrc`; update with `git -C ~/vcpkg pull`. conan: `uv tool install conan`; update with `uv tool upgrade conan`.
 
 ## SSH keys
 
@@ -92,7 +92,7 @@ The first `./zsh-into-docker-container.sh` after a reboot asks on the host for e
 
 ## Claude Code
 
-The CLI is installed in the image, but nothing is shared with the host's Claude Code: no credentials, no settings. Log in inside (`claude`) with any account, and configure it as you like; everything lives in the home volume and survives rebuilds. The CLI updates itself there too.
+The CLI is installed in the image, but nothing is shared with the host's Claude Code: no credentials, no settings. Log in inside (`claude`) with any account, and configure it as you like; everything lives in the home volume and survives rebuilds. The CLI updates itself there too. The entrypoint keeps a checkout of nicnajder-general-utils in `~/Tools` (see [How it is wired](#how-it-is-wired)) but wires nothing from it into `~/.claude`.
 
 The image ships a root-owned `/etc/claude-code/managed-settings.json` that denies Claude's `Read` / `Edit` on `~/.ssh/**`, in case a key is ever put there by hand (keys normally stay on the host, see "SSH keys"). User and project settings cannot override managed settings, but root can, and devuser (so Claude too) has passwordless sudo. It is a guard against **accidental** reads (e.g. a key ending up in a transcript), not a hard boundary: Claude Code enforces it for its own file tools and for Bash commands it recognizes (`cat`, `head`, ...), but not for arbitrary programs, e.g. a Python script reading the file.
 
@@ -103,12 +103,13 @@ Claude can use the SSH keys loaded in the host agent, e.g. for `git push`. This 
 - **No Docker access** - the host's `/var/run/docker.sock` is not mounted (access to it is root-equivalent on the host).
 - **Only `fast_share`** is shared with the host filesystem, plus two sockets: X11 (below) and the host ssh-agent (see "SSH keys"). Everything else lives in the image or the `devuser-home` named volume.
 - **Bridge network, no published ports** - outbound traffic is NATed through the host, so the container reaches whatever the host reaches: the internet, the LAN, VPN / mesh peers (Tailscale, NetBird, ...), and host services listening on `0.0.0.0` (via the bridge gateway IP). Only services bound to the host's `127.0.0.1` are unreachable. The other direction is open too: on Linux the host can connect to the container's IP directly. For a stable address, add a `ports:` entry to `compose.yaml` (e.g. `- "127.0.0.1:8000:8000"`), make the server inside listen on `0.0.0.0`, and re-run `./up.sh`.
-- **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`. `typora` is a wrapper that runs Typora with `--no-sandbox`: Chromium's own sandbox needs namespace syscalls that Docker's default seccomp profile blocks, and allowing them would weaken the whole container.
+- **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`. Chromium / Electron-based apps you install need `--no-sandbox`: Chromium's own sandbox needs namespace syscalls that Docker's default seccomp profile blocks, and allowing them would weaken the whole container.
 
 ## How it is wired
 
 - **`/home/devuser` is a named volume** (`devuser-home`) - `~/.ssh`, `~/.claude`, zsh history, your code and caches survive restarts and rebuilds. Wiped only by `docker compose down -v`. Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so later image rebuilds do not update them. The image's own shell setup therefore lives in `/etc/zsh/zshrc`.
-- **Git identity** from `.env` (`DEV_NAME` / `DEV_EMAIL`) is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
+- **`entrypoint.sh`** (`../shared-scripts/entrypoint.sh`, shared by both dev dockers) runs on every container start: applies the git identity from `.env` (`DEV_NAME` / `DEV_EMAIL`; change it and `docker compose restart dev-env`), adds micro editor defaults (soft wrap) where unset, and updates the utils checkout below.
+- **`~/Tools/nicnajder-general-utils`** - `entrypoint.sh` clones [mrscooter/nicnajder-general-utils](https://github.com/mrscooter/nicnajder-general-utils) there on the first start and brings its `master` up to date on every start: fast-forwarded when checked out, otherwise only the `master` ref moves. The update fetches anonymously over HTTPS; `origin` is set to the SSH address for your own pull / push. Offline or a diverged `master` only prints a warning. There is no switch to turn it off.
 - **devuser** has UID/GID 1000 and passwordless sudo, deliberately: the container is a space where Claude can do anything without permission prompts, including breaking it.
 
 ## Common operations
