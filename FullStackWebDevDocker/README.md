@@ -66,7 +66,7 @@ Edit `.env` and set (the file documents every variable):
 | `POSTGRES_DB` | this worktree's database name (default `devdocker_default_db`) |
 | `FASTSHARE_PATH` | host dir: absolute, `~/...`, or `./`-relative to this directory; a bare name without `./` is a Docker volume (must exist, owned by `USER_ID:GROUP_ID`) bridged to `~/fast_share` |
 
-Defaults for everything else are fine on a typical UID-1000 Linux desktop. Claude skills work out of the box; the Claude login is separate from the host's, so you log in once inside the container - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
+Defaults for everything else are fine on a typical UID-1000 Linux desktop. The Claude login is separate from the host's, so you log in once inside the container - see [Claude integration](#claude-integration). Validate with `docker compose config` if unsure.
 
 Then create the `FASTSHARE_PATH` directory on the host (it must exist before you start the container, or the bind-mount creates a root-owned, unwritable one):
 
@@ -170,13 +170,10 @@ Or have the app read its own `DATABASE_URL` (e.g. `dj-database-url` / `django-en
 
 ## Claude integration
 
-The container runs its own Claude Code CLI with its own login and your personal skills/instructions, without baking anything machine-specific into the image. Three independent pieces:
+The container runs its own Claude Code CLI with its own login and config, without baking anything machine-specific into the image.
 
 - **Login (container-local).** Nothing from the host's `~/.claude` is mounted, so the host login never reaches the container. Run `claude` inside the container and log in (open the URL it prints in your host browser). The login lands in `~/.claude/.credentials.json` in the home volume: it survives restarts and is wiped only by `docker compose down -v`. Host and container are separate logins.
-- **Config, skills and status line (bootstrapped on every start).** `entrypoint.sh` clones the public utils repo to `~/Tools/nicnajder-general-utils` (first start only) and runs its `install.sh --yes claude`, the same installer as on any machine: `~/.claude/CLAUDE.md` with the general rules, a container-local `~/.claude/LOCAL-CLAUDE.md` (no Mercury), the status line, and the `ncn` plugin with the skills. The installer is idempotent, so later starts change nothing; results persist in the home volume. `--yes` replaces whatever is in its way without asking (moved to the clone's `backups/`), so the repo's layout always wins.
-- **Keeping it fresh.** The installed files are symlinks into the clone, so editing files in the repo is reflected live. To get *new commits*, `git pull` in the clone; the next start (or `install.sh claude` by hand) picks up added files.
-
-The bootstrap is configurable in `.env` (`CLAUDE_BOOTSTRAP`, `CLAUDE_UTILS_REPO`, `CLAUDE_UTILS_DIR`); set `CLAUDE_BOOTSTRAP=false` to skip the bootstrap entirely.
+- **Config (none installed).** The image sets up no Claude config: no instructions, skills or status line. Configure it inside the container as you like; it persists in the home volume.
 
 ## SSH keys
 
@@ -212,7 +209,7 @@ cd FullStackWebDevDocker-wtB
 ./up.sh                        # the copied directory's name keeps it a separate compose project
 ```
 
-Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy), and the Claude config is installed per volume; give each its own `FASTSHARE_PATH` if you want separate bridges. Each also gets its own host ssh-agent; `SSH_KEY_DIR` above shares the original's keys, leave it out to use `~/.ssh/<CONTAINER_NAME>/` instead.
+Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy); give each its own `FASTSHARE_PATH` if you want separate bridges. Each also gets its own host ssh-agent; `SSH_KEY_DIR` above shares the original's keys, leave it out to use `~/.ssh/<CONTAINER_NAME>/` instead.
 
 ## How it is wired
 
@@ -221,7 +218,7 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 - **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
 - **Playwright** browsers are baked at `/opt/ms-playwright` (owned by `devuser`), `PLAYWRIGHT_BROWSERS_PATH` exported - e2e tests run immediately. If your project pins a different Playwright version, re-run `npx playwright install` (no sudo).
 - **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
-- **Claude** has its own container-local login (not the host's) and its config/skills are bootstrapped on every start - see [Claude integration](#claude-integration).
+- **Claude** has its own container-local login and config (not the host's) - see [Claude integration](#claude-integration).
 - **SSH keys** never enter the container: it uses a per-container host-side ssh-agent through a mounted socket - see [SSH keys](#ssh-keys).
 - **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so WebStorm and other GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`.
 

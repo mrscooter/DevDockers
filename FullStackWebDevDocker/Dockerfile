@@ -138,7 +138,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="/home/devuser/.local/bin:/home/devuser/.claude/local/bin:${PATH}"
 
-# Entrypoint applies git identity + the Claude bootstrap on every container start (so
+# Entrypoint applies git identity + editor defaults on every container start (so
 # .env changes take effect without rebuilding the image or wiping the home volume).
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["entrypoint.sh"]
