@@ -2,25 +2,7 @@
 # new digest silently rebuilds every layer. Bump deliberately, see ../CLAUDE.md.
 ARG BASE_IMAGE=ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
-# Stage 1: WebStorm download - pinned, sha256-verified, extracted to /opt/. Its own stage
-# so edits to the final stage re-copy it locally instead of downloading it again.
-# Downloaded under its original filename because JetBrains' .sha256 file references it.
-FROM ${BASE_IMAGE} AS webstorm
-
-ARG WEBSTORM_VERSION=2026.1.2
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ca-certificates wget \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /tmp/webstorm
-RUN wget -q https://download.jetbrains.com/webstorm/WebStorm-${WEBSTORM_VERSION}.tar.gz && \
-    wget -q https://download.jetbrains.com/webstorm/WebStorm-${WEBSTORM_VERSION}.tar.gz.sha256 && \
-    sha256sum -c WebStorm-${WEBSTORM_VERSION}.tar.gz.sha256 && \
-    tar -xzf WebStorm-${WEBSTORM_VERSION}.tar.gz -C /opt/
-
-
-# Final image. Layers are ordered so routine edits rebuild only the cheap tail - read
+# Layers are ordered so routine edits rebuild only the cheap tail - read
 # "Dockerfile layer order" in ../CLAUDE.md before adding or moving anything.
 FROM ${BASE_IMAGE}
 
@@ -33,9 +15,10 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV LANG=C.UTF-8
 
 # base apt: what later layers need while building (curl, gnupg, git, sudo, zsh, dbus)
-# plus stable system plumbing and the X11/DBus/GL + GUI shared libs for the WebStorm
-# GUI (Playwright's browser deps come via its install-deps layer, not here). Editing this
-# list rebuilds everything below; new packages go to the extras layer.
+# plus stable system plumbing: X11/DBus/GL basics and the GUI shared libs (NSS, ATK,
+# libXtst/libXi, ...) that IDEs and Electron apps the user installs by hand need. Playwright's
+# browser deps come via its install-deps layer, not here. Editing this list rebuilds
+# everything below; new packages go to the extras layer.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git sudo zsh \
         python3 python3-venv \
@@ -59,10 +42,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
 # the dep list and must know the base OS (1.61+ for Ubuntu 26.04).
 RUN npx --yes playwright@1.64.1 install-deps chromium firefox webkit && \
     rm -rf /var/lib/apt/lists/* /root/.npm
-
-# WebStorm from stage 1, symlinked onto PATH.
-COPY --from=webstorm /opt /opt
-RUN ln -s /opt/WebStorm-*/bin/webstorm.sh /usr/local/bin/webstorm
 
 # Tools from official apt repos (Ubuntu's are older/absent) - PostgreSQL client 16
 # (PGDG) and GitHub CLI (gh). Postgres: client only; the server runs as a separate

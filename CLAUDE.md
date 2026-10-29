@@ -2,10 +2,10 @@
 
 ## Dockerfile layer order (build cache)
 
-Docker rebuilds a changed layer and every layer below it. The heavy layers (WebStorm, LLVM, the C/C++ toolchain, GCC 16, Playwright's OS libs) cost GBs of downloads, so both Dockerfiles are ordered so that routine edits rebuild only the cheap tail:
+Docker rebuilds a changed layer and every layer below it. The heavy layers (LLVM, the C/C++ toolchain, GCC 16, Playwright's OS libs) cost GBs of downloads, so both Dockerfiles are ordered so that routine edits rebuild only the cheap tail:
 
 ```
-stages:  big downloads/builds, cached on their own (gcc-build, webstorm)
+stages:  big downloads/builds, cached on their own (gcc-build)
 final:   SHELL, ENV LANG
          base apt         - what later layers need while building + stable plumbing
          heavy layers     - least-changed first; COPY --from the stages
@@ -19,7 +19,7 @@ final:   SHELL, ENV LANG
 - A new apt package goes into the `extras` layer, unless a layer above `extras` needs it while building. Only then does it go into `base`, which means a full rebuild.
 - Only build-time needs count for placement. A package a heavy app needs only at runtime does not have to sit above that app.
 - Keep the two generic apt layers (`base`, `extras`); don't add one apt layer per tool. Packages from a third-party apt repo stay in their own layer.
-- A new big download (archive, git clone, source build) gets its own stage plus `COPY --from=...`, like `gcc-build` and `webstorm`.
+- A new big download (archive, git clone, source build) gets its own stage plus `COPY --from=...`, like `gcc-build`.
 - Declare an `ARG` right before its first use: every `RUN` after an `ARG` has it in its cache key.
 - oh-my-zsh, Claude Code and (FullStack) uv install into the home volume, which hides the image's copy after the volume's first start. They only seed fresh volumes, so they sit above `extras` and rarely rebuild.
 - Often-edited content (the zshrc block, config `COPY`s, entrypoint) stays at the very end.
@@ -28,12 +28,12 @@ final:   SHELL, ENV LANG
 
 ## Image vs project vs home volume
 
-- Image: what needs root or system paths and serves every project - apt packages, system toolchains, GUI apps, OS libs a project tool needs (e.g. `playwright install-deps`).
+- Image: what needs root or system paths and serves every project - apt packages, system toolchains, OS libs a project tool or a hand-installed GUI app needs (e.g. `playwright install-deps`).
 - Project: anything a project manifest pins - npm packages and their Playwright browsers, Python deps and interpreter (uv), conan/vcpkg packages. The project's own setup (e.g. `make setup`) installs it.
-- Home volume (`/home/devuser`, survives recreates): per-user tools the user installs and updates without a rebuild - uv tools (conan), the vcpkg clone (General), Claude Code, oh-my-zsh.
+- Home volume (`/home/devuser`, survives recreates): per-user tools the user installs and updates without a rebuild - IDEs, uv tools (conan), the vcpkg clone (General), Claude Code, oh-my-zsh.
 - Anything installed outside `~` inside a running container (e.g. `sudo apt install`) is lost on the next recreate, and `up.sh` recreates after every image change. An apt package worth keeping goes into `extras`.
 - Never point a project cache at an image path (e.g. `PLAYWRIGHT_BROWSERS_PATH=/opt/...`): installs there land in the container layer and are lost on every recreate.
-- GeneralDevDocker ships no GUI app but keeps full X11 support (X socket mount, `xhost-setup.sh`, `DISPLAY`, dbus-x11, GL libs, machine-id) on purpose: the user installs GUI apps by hand inside the container. Don't remove the X11 support as unused, and don't bake GUI apps into the image unless asked.
+- Neither image ships an IDE or other GUI app, but both keep full X11 support (X socket mount, `xhost-setup.sh`, `DISPLAY`, dbus-x11, GL libs, machine-id) on purpose: the user installs IDEs and GUI apps by hand, per container, into the home volume. Don't remove the X11 support or FullStack's GUI libs in `base` as unused, and don't bake an IDE or GUI app into an image unless asked.
 
 ## Base image pinning
 

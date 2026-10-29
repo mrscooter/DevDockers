@@ -1,6 +1,6 @@
 # Full-Stack Web Dev Docker
 
-A throwaway, containerized dev environment for **any** full-stack web project - Python backend + Node frontend + PostgreSQL (Django + React, FastAPI + Vue, Flask + Svelte, ...). It bundles the IDE and all the runtimes/tooling so your work - including AI agents you let loose inside - stays isolated from the host: the only host files touched are your project checkout (and only if you opt in).
+A throwaway, containerized dev environment for **any** full-stack web project - Python backend + Node frontend + PostgreSQL (Django + React, FastAPI + Vue, Flask + Svelte, ...). It bundles the runtimes/tooling, but no IDE (install one per container, see [step 9](#9-run-it)), so your work - including AI agents you let loose inside - stays isolated from the host: the only host files touched are your project checkout (and only if you opt in).
 
 The image ships runtimes, not your app. Your project's own dependencies arrive when you run `uv sync` / `npm ci` against its lockfiles inside the container.
 
@@ -17,10 +17,11 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 
 | Inside the image | |
 |---|---|
-| OS / IDE | Ubuntu 26.04 LTS, WebStorm 2026.1.2 (GUI via X11 to your host) |
+| OS | Ubuntu 26.04 LTS |
 | Backend | Python 3.14 + `uv` (Astral); `gcc` / `g++` + Python headers, only for building packages that ship no wheel |
 | Frontend | Node.js 24 + npm, Playwright browser OS libs (browsers per project) |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
+| GUI | X11 forwarding and GUI libs for apps you install (no IDE or other GUI app preinstalled) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, make, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
@@ -35,9 +36,9 @@ Run these in order. Steps 0-4 are on the **host**; from step 5 you are **inside 
 |---|---|
 | Docker Engine + Compose v2 | `docker --version && docker compose version` |
 | You are in the `docker` group | `getent group docker` lists you; else `sudo usermod -aG docker $USER && newgrp docker` |
-| X11 (for the WebStorm GUI) | `echo $DISPLAY` prints `:0` or similar (Wayland: needs XWayland) |
+| X11 (for GUI apps you install) | `echo $DISPLAY` prints `:0` or similar (Wayland: needs XWayland) |
 | `xhost` present | `command -v xhost` |
-| ~6 GB free disk | image is ~5 GB |
+| ~3 GB free disk | image is ~2 GB |
 
 ### 1. Start the shared database (once for all worktrees)
 
@@ -77,7 +78,7 @@ mkdir -p ~/fast_share_fswdd       # then set FASTSHARE_PATH=~/fast_share_fswdd i
 ### 3. Build the image
 
 ```bash
-docker compose build          # first build ~10-15 min (WebStorm, Playwright OS libs, apt)
+docker compose build          # first build takes a few minutes (apt, Playwright OS libs)
 ```
 
 ### 4. Start the container
@@ -87,7 +88,7 @@ docker compose build          # first build ~10-15 min (WebStorm, Playwright OS 
 docker compose ps             # dev-env should be Up
 ```
 
-`./up.sh` wraps `docker compose up -d`: it first grants the X server access so the WebStorm GUI can open windows (warning loudly, but still starting, if there is no display to reach) and creates the ssh-agent socket and SSH key dirs (see [SSH keys](#ssh-keys)), then starts the container in the background with `--build`, so Dockerfile changes always reach the container (the image is rebuilt from cache; nothing changed = a few seconds, container left running). Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --force-recreate`.
+`./up.sh` wraps `docker compose up -d`: it first grants the X server access so GUI apps can open windows (warning loudly, but still starting, if there is no display to reach) and creates the ssh-agent socket and SSH key dirs (see [SSH keys](#ssh-keys)), then starts the container in the background with `--build`, so Dockerfile changes always reach the container (the image is rebuilt from cache; nothing changed = a few seconds, container left running). Re-run it any time - the X grant is idempotent. Extra args pass through to `docker compose up`, e.g. `./up.sh --force-recreate`.
 
 ### 5. Get a shell inside
 
@@ -133,13 +134,9 @@ Point your app at the DB via the `PG*` connection vars plus an explicit database
 
 ### 9. Run it
 
-```bash
-webstorm &                                # IDE window opens on your host display
-# launch your backend + frontend dev servers on this worktree's ports;
-# with host networking they are reachable from the host browser at the same port.
-```
+Launch your backend + frontend dev servers on this worktree's ports; with host networking they are reachable from the host browser at the same port.
 
-First WebStorm launch: activate your JetBrains license once (it persists in the named volume).
+No IDE is included. If you want one in this container, install it into your home (e.g. a JetBrains IDE tarball unpacked under `~/.local`), where it survives recreates, and start it from the shell; its window opens on your host display.
 
 That is the whole setup. The sections below are reference.
 
@@ -217,14 +214,14 @@ Each copy gets its own `.env` and `devuser-home` volume (so its own Playwright b
 ## How it is wired
 
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
-- **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB). Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so the image's own shell setup lives in `/etc/zsh/zshrc`, which rebuilds do update.
+- **`/home/devuser` is a named volume** (`devuser-home`) - IDEs you install, their settings/license, caches, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB). Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so the image's own shell setup lives in `/etc/zsh/zshrc`, which rebuilds do update.
 - **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
 - **Playwright** - the image has the browsers' OS libraries only. The browsers must match each project's Playwright version, so the project installs them (`npx playwright install`, no sudo; e.g. in its `make setup`) into `~/.cache/ms-playwright` in the home volume, where they survive recreates and are shared by projects on the same Playwright version. Worktree copies have their own home volume, so each installs its own.
 - **`entrypoint.sh`** runs on every container start: applies the git identity from `.env` (change it and `docker compose restart dev-env`), adds micro editor defaults (soft wrap) where unset, and updates the utils checkout below.
 - **`~/Tools/nicnajder-general-utils`** - `entrypoint.sh` clones [mrscooter/nicnajder-general-utils](https://github.com/mrscooter/nicnajder-general-utils) there on the first start and brings its `master` up to date on every start: fast-forwarded when checked out, otherwise only the `master` ref moves. The update fetches anonymously over HTTPS; `origin` is set to the SSH address for your own pull / push. Offline or a diverged `master` only prints a warning. There is no switch to turn it off.
 - **Claude** has its own container-local login and config (not the host's) - see [Claude integration](#claude-integration).
 - **SSH keys** never enter the container: it uses a per-container host-side ssh-agent through a mounted socket - see [SSH keys](#ssh-keys).
-- **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so WebStorm and other GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`.
+- **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so GUI apps you install open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`. Chromium / Electron-based apps you install (e.g. VS Code) need `--no-sandbox`: Chromium's own sandbox needs namespace syscalls that Docker's default seccomp profile blocks, and allowing them would weaken the whole container.
 
 ## Common operations
 
@@ -241,7 +238,7 @@ Each copy gets its own `.env` and `devuser-home` volume (so its own Playwright b
 
 | Problem | Fix |
 |---------|-----|
-| WebStorm window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
+| GUI window doesn't appear | `./up.sh` grants X access for you; if it still won't open you likely have no reachable display. Check `echo $DISPLAY` is set and you're in a graphical session (Wayland needs XWayland), then re-run `./xhost-setup.sh`. Error looks like `Can't connect to X11 window server`. |
 | `psql` / app can't reach the DB | Is `../shared-db` Up (healthy)? Do `POSTGRES_USER`/`POSTGRES_PASSWORD`/`PG_HOST_PORT` match `../shared-db/.env`? There's no ambient DB - are you naming one (`psql -d <db>`)? Does it exist (`createdb <db>`)? |
 | Permission denied on Mode B code | `USER_ID`/`GROUP_ID` in `.env` must match host `id -u`/`id -g`. |
 | Startup / mount fails | A required `.env` var is unset - check `docker compose config`. |

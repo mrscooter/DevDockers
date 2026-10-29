@@ -1,14 +1,14 @@
 # DevDockers
 
-Containerized, throwaway dev environments - one per stack. Each bundles the runtimes/tooling for its stack (plus an IDE where the stack wants one), so all work (including AI agents let loose inside) stays isolated from the host. Spin up, work, throw away.
+Containerized, throwaway dev environments - one per stack. Each bundles the runtimes/tooling for its stack, but no IDE (installed by hand per container, in its home volume), so all work (including AI agents let loose inside) stays isolated from the host. Spin up, work, throw away.
 
-One image per stack on purpose - not a single mega-image. A web project should not drag a C++ toolchain (and four JetBrains IDEs) into its container. Shared scaffolding stays light: the host-side scripts (`up.sh`, `zsh-into-docker-container.sh` and their helpers) live once in `shared-scripts/` and each dev-docker symlinks them, the rest is copied where it is cheap; a common base image gets extracted only once a third stack makes the duplication hurt.
+One image per stack on purpose - not a single mega-image. A web project should not drag a C++ toolchain into its container. Shared scaffolding stays light: the host-side scripts (`up.sh`, `zsh-into-docker-container.sh` and their helpers) live once in `shared-scripts/` and each dev-docker symlinks them, the rest is copied where it is cheap; a common base image gets extracted only once a third stack makes the duplication hurt.
 
 ## What's here
 
 | Dir | Role |
 |---|---|
-| [`FullStackWebDevDocker/`](FullStackWebDevDocker/) | Web stack: WebStorm + Python 3.14/uv + Node 24 + Playwright's OS libs. Serves any Python-backend + Node-frontend + Postgres project. |
+| [`FullStackWebDevDocker/`](FullStackWebDevDocker/) | Web stack: Python 3.14/uv + Node 24 + Playwright's OS libs, no IDE. Serves any Python-backend + Node-frontend + Postgres project. |
 | [`shared-db/`](shared-db/) | One shared PostgreSQL 16, used by all web dev-dockers. |
 | [`GeneralDevDocker/`](GeneralDevDocker/) | General Linux box for Python + C/C++ experiments: GCC 16 + Clang 23 + Python 3.14/uv, no IDE. Stricter isolation than FullStack: bridge network instead of host networking, no host project mount. Standalone - no shared-db. |
 | [`shared-scripts/`](shared-scripts/) | Host-side scripts shared by the dev-dockers, symlinked into each one's dir: `up.sh`, `zsh-into-docker-container.sh`, `ssh-agent-paths.sh`, `xhost-setup.sh`. They `cd` to the symlink's dir, so they act on that dev-docker's `compose.yaml` / `.env`. Run them through the symlinks, not from here. |
