@@ -1,7 +1,11 @@
+# Base image pinned by digest: the bare tag is republished every week or two, and each
+# new digest silently rebuilds every layer. Bump deliberately, see ../CLAUDE.md.
+ARG BASE_IMAGE=ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
+
 # Stage 1: GCC from source. Ubuntu 26.04 ships GCC 15 as default and only a pre-release
 # snapshot of gcc-16, so the latest stable GCC is built here (C++26 reflection/contracts).
 # Installed to /opt/gcc-16 and copied into the final image; this stage is layer-cached.
-FROM ubuntu:26.04 AS gcc-build
+FROM ${BASE_IMAGE} AS gcc-build
 
 ARG GCC_VERSION=16.2.0
 ARG GCC_SHA512=c51c30ca7422d0cbecf504b2e0f33c3aca31e0f90a76b65217f465163fa6fa17b3f5de39e145c47e5bab90ac0ce7fff3b03c8d553ae36e01faaea5a50f8648d1
@@ -27,21 +31,9 @@ RUN wget -q https://sourceware.org/pub/gcc/releases/gcc-${GCC_VERSION}/gcc-${GCC
     make install-strip
 
 
-# Stage 2: vcpkg, full clone (its versioning/baselines need history) + bootstrap. Its own
-# stage so edits to the final stage re-copy it locally instead of cloning again.
-FROM ubuntu:26.04 AS vcpkg
-
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        ca-certificates curl git zip unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg && \
-    /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-
-
 # Final image. Layers are ordered so routine edits rebuild only the cheap tail - read
 # "Dockerfile layer order" in ../CLAUDE.md before adding or moving anything.
-FROM ubuntu:26.04
+FROM ${BASE_IMAGE}
 
 # Fail a RUN when any command in a pipe fails, not just the last one: a `curl | bash`
 # installer whose download failed would otherwise build a layer without the tool.
@@ -51,9 +43,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # PROMPT_PREFIX) in bytes, misplaces the cursor on redraw and leaves stale text.
 ENV LANG=C.UTF-8
 
-# base apt: what later layers need while building (curl, gnupg, git, sudo, zsh, dbus,
-# python3 for conan) plus stable system plumbing and X11/DBus/GL basics for GUI apps
-# like Typora. Python 3.14 is the 26.04 system Python. Editing this list rebuilds
+# base apt: what later layers need while building (curl, gnupg, git, sudo, zsh, dbus)
+# plus stable system plumbing, X11/DBus/GL basics for GUI apps and Python 3.14 (the
+# 26.04 system Python). zip/unzip are vcpkg runtime deps. Editing this list rebuilds
 # everything below; new packages go to the extras layer.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg git sudo zsh zip unzip xz-utils \
@@ -96,26 +88,6 @@ RUN echo /opt/gcc-16/lib64 > /etc/ld.so.conf.d/gcc-16.conf && ldconfig && \
     done && \
     ln -s /opt/gcc-16/bin/gcc-16 /usr/local/bin/cc
 
-# Typora (markdown editor, GUI over X11). Direct CDN download rather than the
-# typora.io/linux apt repo, whose origin intermittently 526s behind Cloudflare.
-# The .deb does not declare its Electron runtime libs, so they are listed explicitly;
-# gsettings-desktop-schemas keeps GTK's open/save dialogs from aborting.
-# The /usr/local/bin/typora wrapper (ahead of /usr/bin on PATH) adds --no-sandbox:
-# Chromium's sandbox must create PID/network namespaces, which Docker's default seccomp
-# profile forbids. Allowing that (seccomp=unconfined / CAP_SYS_ADMIN) would weaken the
-# whole container, so only Typora runs unsandboxed, with the container as its boundary.
-RUN curl -fsSL -o /tmp/typora.deb \
-        https://download.typora.io/linux/typora_1.13.6_amd64.deb && \
-    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        /tmp/typora.deb \
-        libnss3 libnspr4 libgtk-3-0t64 libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 \
-        libcups2t64 libasound2t64 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-        libxrandr2 gsettings-desktop-schemas && \
-    rm -f /tmp/typora.deb && \
-    rm -rf /var/lib/apt/lists/* && \
-    printf '#!/bin/sh\nexec /usr/share/typora/Typora --no-sandbox "$@"\n' > /usr/local/bin/typora && \
-    chmod 755 /usr/local/bin/typora
-
 # GitHub CLI (gh) from its official apt repo.
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
@@ -125,10 +97,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
-# uv system-wide, plus conan as an image-managed uv tool (upgrade by rebuilding).
-RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh && \
-    UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
-        uv tool install --python /usr/bin/python3 conan
+# uv system-wide. Python tools such as conan are per user (`uv tool install conan`, into
+# ~/.local in the home volume), so they persist and upgrade without a rebuild.
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 
 # Free UID 1000 (Ubuntu base image's built-in `ubuntu` user) and create devuser.
 # Using host UID 1000 means no chown of bind-mounted host directories needed.
@@ -144,11 +115,11 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
     echo "devuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser && \
     chmod 0440 /etc/sudoers.d/devuser
 
-# vcpkg from stage 2, owned by devuser so `git pull` + re-bootstrap work without sudo.
-COPY --from=vcpkg --chown=devuser:devgroup /opt/vcpkg /opt/vcpkg
-ENV VCPKG_ROOT=/opt/vcpkg \
+# vcpkg is cloned once by the user into the home volume (README "Compilers"), so its
+# `git pull` updates survive container recreates. Only its environment is set here.
+ENV VCPKG_ROOT=/home/devuser/vcpkg \
     VCPKG_DISABLE_METRICS=1 \
-    PATH="/opt/vcpkg:${PATH}"
+    PATH="/home/devuser/vcpkg:${PATH}"
 
 # dbus machine-id (some GUI apps complain without it).
 # Note: --ensure errors on Ubuntu's empty /etc/machine-id, so write directly.

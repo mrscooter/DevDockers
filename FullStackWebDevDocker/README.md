@@ -17,9 +17,9 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 
 | Inside the image | |
 |---|---|
-| OS / IDE | Ubuntu 24.04, WebStorm 2026.1.2 (GUI via X11 to your host) |
-| Backend | Python 3.12 + `uv` (Astral) |
-| Frontend | Node.js 24 + npm, Playwright browsers pre-baked |
+| OS / IDE | Ubuntu 26.04 LTS, WebStorm 2026.1.2 (GUI via X11 to your host) |
+| Backend | Python 3.14 + `uv` (Astral) |
+| Frontend | Node.js 24 + npm, Playwright browser OS libs (browsers per project) |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
 
@@ -77,7 +77,7 @@ mkdir -p ~/fast_share_fswdd       # then set FASTSHARE_PATH=~/fast_share_fswdd i
 ### 3. Build the image
 
 ```bash
-docker compose build          # first build ~10-15 min (WebStorm, Playwright, apt)
+docker compose build          # first build ~10-15 min (WebStorm, apt)
 ```
 
 ### 4. Start the container
@@ -216,7 +216,7 @@ Each copy gets its own `.env` and `devuser-home` volume, its own database on the
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
 - **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB). Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so the image's own shell setup lives in `/etc/zsh/zshrc`, which rebuilds do update.
 - **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
-- **Playwright** browsers are baked at `/opt/ms-playwright` (owned by `devuser`), `PLAYWRIGHT_BROWSERS_PATH` exported - e2e tests run immediately. If your project pins a different Playwright version, re-run `npx playwright install` (no sudo).
+- **Playwright** - the image has the browsers' OS libraries only. The browsers must match each project's Playwright version, so the project installs them (`npx playwright install`, no sudo; e.g. in its `make setup`) into `~/.cache/ms-playwright` in the home volume, where they survive recreates and are shared by worktrees on the same version.
 - **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
 - **Claude** has its own container-local login and config (not the host's) - see [Claude integration](#claude-integration).
 - **SSH keys** never enter the container: it uses a per-container host-side ssh-agent through a mounted socket - see [SSH keys](#ssh-keys).

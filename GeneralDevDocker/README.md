@@ -6,9 +6,9 @@ A throwaway, containerized Linux box for **Python and C/C++ experiments**. No ID
 |---|---|
 | OS | Ubuntu 26.04 LTS |
 | C/C++ compilers | GCC 16.2 (built from source, default `gcc`/`g++`), GCC 15 (`gcc-15`/`g++-15`), LLVM/Clang 23 (apt.llvm.org) incl. libc++, lld, lldb, clangd, clang-format, clang-tidy, sanitizers |
-| C/C++ tooling | CMake 4.2, Ninja, Meson, Autotools, pkg-config, ccache, mold, gdb, valgrind, strace, ltrace, cppcheck, bear, doxygen + graphviz, conan, vcpkg (`/opt/vcpkg`) |
+| C/C++ tooling | CMake 4.2, Ninja, Meson, Autotools, pkg-config, ccache, mold, gdb, valgrind, strace, ltrace, cppcheck, bear, doxygen + graphviz; conan and vcpkg per user (see [Compilers](#compilers)) |
 | Python | Python 3.14 (+ venv, dev headers; `python` = `python3`), `uv` |
-| GUI | Typora (X11) |
+| GUI | X11 forwarding for GUI apps you run (none preinstalled) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
@@ -73,7 +73,7 @@ claude                        # log in with whichever Claude account you want he
 - C++26: `g++ -std=c++26` (GCC 16 defaults to C++20). Reflection additionally needs `-freflection`, contracts `-fcontracts`; both are experimental in GCC 16 and not available in Clang 23 (no `<meta>`, no `pre`/`post`).
 - Clang uses the system's GCC 15 libstdc++ by default. For newer library features use `clang++ -stdlib=libc++`, or point it at GCC 16's libstdc++ with `--gcc-install-dir=/opt/gcc-16/lib/gcc/x86_64-linux-gnu/16.2.0`.
 - Binaries built by GCC 16 find its newer `libstdc++` at runtime via `/etc/ld.so.conf.d/gcc-16.conf`; no `LD_LIBRARY_PATH` needed.
-- `vcpkg` lives in `/opt/vcpkg` (owned by devuser, `VCPKG_ROOT` set): update with `git -C /opt/vcpkg pull`. `conan` is image-managed: upgrade by rebuilding the image.
+- `vcpkg` and `conan` are per user, in the home volume, so they survive rebuilds and update without one. One-time setup: `git clone https://github.com/microsoft/vcpkg.git ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh -disableMetrics` (`VCPKG_ROOT` and `PATH` already point at `~/vcpkg`; update with `git -C ~/vcpkg pull`), and `uv tool install conan` (update with `uv tool upgrade conan`).
 
 ## SSH keys
 
