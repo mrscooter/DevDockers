@@ -18,10 +18,10 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 | Inside the image | |
 |---|---|
 | OS / IDE | Ubuntu 26.04 LTS, WebStorm 2026.1.2 (GUI via X11 to your host) |
-| Backend | Python 3.14 + `uv` (Astral) |
+| Backend | Python 3.14 + `uv` (Astral); `gcc` / `g++` + Python headers, only for building packages that ship no wheel |
 | Frontend | Node.js 24 + npm, Playwright browser OS libs (browsers per project) |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
-| Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, vim/nano/micro/bat, jq, tree, xclip |
+| Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, make, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
 
@@ -37,7 +37,7 @@ Run these in order. Steps 0-4 are on the **host**; from step 5 you are **inside 
 | You are in the `docker` group | `getent group docker` lists you; else `sudo usermod -aG docker $USER && newgrp docker` |
 | X11 (for the WebStorm GUI) | `echo $DISPLAY` prints `:0` or similar (Wayland: needs XWayland) |
 | `xhost` present | `command -v xhost` |
-| ~6 GB free disk | image is ~5.7 GB |
+| ~6 GB free disk | image is ~5 GB |
 
 ### 1. Start the shared database (once for all worktrees)
 
@@ -77,7 +77,7 @@ mkdir -p ~/fast_share_fswdd       # then set FASTSHARE_PATH=~/fast_share_fswdd i
 ### 3. Build the image
 
 ```bash
-docker compose build          # first build ~10-15 min (WebStorm, apt)
+docker compose build          # first build ~10-15 min (WebStorm, Playwright OS libs, apt)
 ```
 
 ### 4. Start the container
@@ -124,7 +124,10 @@ createdb my_worktree_db        # use the DB name your app's .env / DATABASE_URL 
 cd ~/code/<project>
 uv sync                                   # backend deps
 ( cd <frontend-dir> && npm ci )           # frontend deps
+( cd <frontend-dir> && npx playwright install )   # e2e browsers, if the project uses Playwright
 ```
+
+If the project has its own setup command (e.g. `make setup`), run that instead; it usually covers these. `uv sync` uses the image's Python 3.14 when it satisfies the project's `requires-python` / `.python-version`, otherwise uv downloads a matching Python.
 
 Point your app at the DB via the `PG*` connection vars plus an explicit database name (the `BASE_DEV_DB_URL` template is a handy starting point) - see [Database connection](#database-connection).
 
@@ -173,7 +176,7 @@ Or have the app read its own `DATABASE_URL` (e.g. `dj-database-url` / `django-en
 The container runs its own Claude Code CLI with its own login and config, without baking anything machine-specific into the image.
 
 - **Login (container-local).** Nothing from the host's `~/.claude` is mounted, so the host login never reaches the container. Run `claude` inside the container and log in (open the URL it prints in your host browser). The login lands in `~/.claude/.credentials.json` in the home volume: it survives restarts and is wiped only by `docker compose down -v`. Host and container are separate logins.
-- **Config (none installed).** The image sets up no Claude config: no instructions, skills or status line. Configure it inside the container as you like; it persists in the home volume.
+- **Config (none installed).** The image sets up no Claude config: no instructions, skills or status line. Configure it inside the container as you like; it persists in the home volume. The entrypoint keeps a checkout of nicnajder-general-utils in `~/Tools` (see [How it is wired](#how-it-is-wired)) but wires nothing from it into `~/.claude`. Home volumes set up by the earlier Claude bootstrap still hold its `~/.claude/CLAUDE.md` and skill symlinks into that checkout, so they now follow its `master` on every start.
 
 ## SSH keys
 
@@ -209,15 +212,16 @@ cd FullStackWebDevDocker-wtB
 ./up.sh                        # the copied directory's name keeps it a separate compose project
 ```
 
-Each copy gets its own `.env` and `devuser-home` volume, its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy); give each its own `FASTSHARE_PATH` if you want separate bridges. Each also gets its own host ssh-agent; `SSH_KEY_DIR` above shares the original's keys, leave it out to use `~/.ssh/<CONTAINER_NAME>/` instead.
+Each copy gets its own `.env` and `devuser-home` volume (so its own Playwright browsers too), its own database on the shared server, and **must use distinct dev-server ports** (host networking makes ports global on the host, so two worktrees on the same port collide). Each has its own Claude login (it lives in the home volume, so log in once per copy); give each its own `FASTSHARE_PATH` if you want separate bridges. Each also gets its own host ssh-agent; `SSH_KEY_DIR` above shares the original's keys, leave it out to use `~/.ssh/<CONTAINER_NAME>/` instead.
 
 ## How it is wired
 
 - **Host networking** - the container shares the host's network stack: dev servers are reachable on the host at the same port (no mapping), and the shared DB is at `localhost:5433`.
 - **`/home/devuser` is a named volume** (`devuser-home`) - IDE settings/license, caches, zsh history, and the Mode A checkout survive restarts. Wiped only by `docker compose down -v` (which does NOT touch the shared DB). Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so the image's own shell setup lives in `/etc/zsh/zshrc`, which rebuilds do update.
 - **No Docker access from inside** - the host's `/var/run/docker.sock` is deliberately not mounted: access to it is root-equivalent on the host, which would void the isolation (incl. of host SSH keys and the Claude login).
-- **Playwright** - the image has the browsers' OS libraries only. The browsers must match each project's Playwright version, so the project installs them (`npx playwright install`, no sudo; e.g. in its `make setup`) into `~/.cache/ms-playwright` in the home volume, where they survive recreates and are shared by worktrees on the same version.
-- **Git identity** from `.env` is applied on every container start by `entrypoint.sh`; change it and `docker compose restart dev-env`.
+- **Playwright** - the image has the browsers' OS libraries only. The browsers must match each project's Playwright version, so the project installs them (`npx playwright install`, no sudo; e.g. in its `make setup`) into `~/.cache/ms-playwright` in the home volume, where they survive recreates and are shared by projects on the same Playwright version. Worktree copies have their own home volume, so each installs its own.
+- **`entrypoint.sh`** runs on every container start: applies the git identity from `.env` (change it and `docker compose restart dev-env`), adds micro editor defaults (soft wrap) where unset, and updates the utils checkout below.
+- **`~/Tools/nicnajder-general-utils`** - `entrypoint.sh` clones [mrscooter/nicnajder-general-utils](https://github.com/mrscooter/nicnajder-general-utils) there on the first start and brings its `master` up to date on every start: fast-forwarded when checked out, otherwise only the `master` ref moves. The update fetches anonymously over HTTPS; `origin` is set to the SSH address for your own pull / push. Offline or a diverged `master` only prints a warning. There is no switch to turn it off.
 - **Claude** has its own container-local login and config (not the host's) - see [Claude integration](#claude-integration).
 - **SSH keys** never enter the container: it uses a per-container host-side ssh-agent through a mounted socket - see [SSH keys](#ssh-keys).
 - **X11** - the host's `/tmp/.X11-unix` socket is mounted and `./up.sh` grants X access to your host UID (`xhost +SI:localuser:<you>`), which the container runs as, so WebStorm and other GUI apps open windows on the host display. Accepted risk: X11 does not isolate clients from each other, so any process in the container, Claude included, can read the host clipboard, and capture and send keystrokes to every X11 / XWayland window on the host (e.g. JetBrains IDEs, which run on XWayland by default). Wayland-native host apps are exposed only through the clipboard. The grant lasts until the X server exits (logout); revoke earlier with `xhost -SI:localuser:$USER`.

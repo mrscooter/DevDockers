@@ -122,9 +122,12 @@ USER root
 
 # extras apt: leaf packages no layer above needs while building - editors, CLI tools.
 # New packages go here by default: editing this list rebuilds only the cheap layers below.
+# gcc/g++ + python3-dev only so uv can build Python packages that ship no wheel for the
+# system Python; no C/C++ dev tooling beyond that.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         wget make tree jq xclip iproute2 openssh-client \
         vim nano bat micro less \
+        gcc g++ python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Shell setup in the system-wide /etc/zsh/zshrc (sourced before ~/.zshrc), not in the

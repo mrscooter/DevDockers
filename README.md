@@ -8,9 +8,9 @@ One image per stack on purpose - not a single mega-image. A web project should n
 
 | Dir | Role |
 |---|---|
-| [`FullStackWebDevDocker/`](FullStackWebDevDocker/) | Web stack: WebStorm + Python 3.14/uv + Node 24 + Playwright. Serves any Python-backend + Node-frontend + Postgres project. |
+| [`FullStackWebDevDocker/`](FullStackWebDevDocker/) | Web stack: WebStorm + Python 3.14/uv + Node 24 + Playwright's OS libs. Serves any Python-backend + Node-frontend + Postgres project. |
 | [`shared-db/`](shared-db/) | One shared PostgreSQL 16, used by all web dev-dockers. |
-| [`GeneralDevDocker/`](GeneralDevDocker/) | General Linux box for Python + C/C++ experiments: GCC 16 + Clang 23 + Python 3.14/uv, no IDE. Stricter isolation (no docker.sock, bridge network, SSH keys only via a host-side agent, own Claude login). Standalone - no shared-db. |
+| [`GeneralDevDocker/`](GeneralDevDocker/) | General Linux box for Python + C/C++ experiments: GCC 16 + Clang 23 + Python 3.14/uv, no IDE. Stricter isolation than FullStack: bridge network instead of host networking, no host project mount. Standalone - no shared-db. |
 | [`shared-scripts/`](shared-scripts/) | Host-side scripts shared by the dev-dockers, symlinked into each one's dir: `up.sh`, `zsh-into-docker-container.sh`, `ssh-agent-paths.sh`, `xhost-setup.sh`. They `cd` to the symlink's dir, so they act on that dev-docker's `compose.yaml` / `.env`. Run them through the symlinks, not from here. |
 
 ## shared-db

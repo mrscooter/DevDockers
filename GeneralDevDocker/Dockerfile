@@ -115,12 +115,6 @@ RUN userdel -r ubuntu 2>/dev/null || true && \
     echo "devuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/devuser && \
     chmod 0440 /etc/sudoers.d/devuser
 
-# vcpkg is cloned once by the user into the home volume (README "Compilers"), so its
-# `git pull` updates survive container recreates. Only its environment is set here.
-ENV VCPKG_ROOT=/home/devuser/vcpkg \
-    VCPKG_DISABLE_METRICS=1 \
-    PATH="/home/devuser/vcpkg:${PATH}"
-
 # dbus machine-id (some GUI apps complain without it).
 # Note: --ensure errors on Ubuntu's empty /etc/machine-id, so write directly.
 RUN dbus-uuidgen > /etc/machine-id && \

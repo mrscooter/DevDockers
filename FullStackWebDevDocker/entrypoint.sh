@@ -23,7 +23,11 @@ utils_ssh=git@github.com:mrscooter/nicnajder-general-utils.git
 utils_dir="${HOME}/Tools/nicnajder-general-utils"
 update_utils_repo() {
   if [ ! -e "${utils_dir}" ]; then
-    mkdir -p "${HOME}/Tools" && git clone -q "${utils_https}" "${utils_dir}" || return
+    # Cloned beside its final path and renamed once complete: a clone killed mid-way (the
+    # container stopped during its first start) leaves no half repo that blocks re-cloning.
+    rm -rf "${utils_dir}.partial"
+    mkdir -p "${HOME}/Tools" && git clone -q "${utils_https}" "${utils_dir}.partial" &&
+      mv "${utils_dir}.partial" "${utils_dir}" || return
   fi
   git -C "${utils_dir}" remote set-url origin "${utils_ssh}" || return
   git -C "${utils_dir}" fetch -q "${utils_https}" +refs/heads/master:refs/remotes/origin/master || return
