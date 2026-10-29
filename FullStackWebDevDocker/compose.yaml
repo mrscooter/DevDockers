@@ -28,11 +28,10 @@ services:
       # shadow a worktree's own .env. A template to derive your per-worktree URL from.
       - BASE_DEV_DB_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devPass77}@localhost:${PG_HOST_PORT:-5433}/${POSTGRES_DB:-devdocker_default_db}
       # Claude bootstrap (see entrypoint.sh). Clones the public utils repo into the
-      # home volume and wires skills + a Mercury-free global CLAUDE.md. The Claude
-      # LOGIN is deliberately not shared from the host: log in inside the container
-      # (it persists in the home volume).
+      # home volume and runs its install.sh claude. The Claude LOGIN is deliberately
+      # not shared from the host: log in inside the container (it persists in the
+      # home volume).
       - CLAUDE_BOOTSTRAP=${CLAUDE_BOOTSTRAP:-true}
-      - CLAUDE_BOOTSTRAP_FORCE=${CLAUDE_BOOTSTRAP_FORCE:-false}
       - CLAUDE_UTILS_REPO=${CLAUDE_UTILS_REPO:-https://github.com/mrscooter/nicnajder-general-utils.git}
       - CLAUDE_UTILS_DIR=${CLAUDE_UTILS_DIR:-/home/devuser/Tools/nicnajder-general-utils}
     shm_size: 256m
