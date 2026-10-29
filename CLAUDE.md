@@ -33,6 +33,7 @@ final:   SHELL, ENV LANG
 - Home volume (`/home/devuser`, survives recreates): per-user tools the user installs and updates without a rebuild - uv tools (conan), the vcpkg clone (General), Claude Code, oh-my-zsh.
 - Anything installed outside `~` inside a running container (e.g. `sudo apt install`) is lost on the next recreate, and `up.sh` recreates after every image change. An apt package worth keeping goes into `extras`.
 - Never point a project cache at an image path (e.g. `PLAYWRIGHT_BROWSERS_PATH=/opt/...`): installs there land in the container layer and are lost on every recreate.
+- GeneralDevDocker ships no GUI app but keeps full X11 support (X socket mount, `xhost-setup.sh`, `DISPLAY`, dbus-x11, GL libs, machine-id) on purpose: the user installs GUI apps by hand inside the container. Don't remove the X11 support as unused, and don't bake GUI apps into the image unless asked.
 
 ## Base image pinning
 
