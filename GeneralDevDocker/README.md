@@ -8,7 +8,7 @@ A throwaway, containerized Linux box for **Python and C/C++ experiments**. No ID
 | C/C++ compilers | GCC 16.2 (built from source, default `gcc`/`g++`), GCC 15 (`gcc-15`/`g++-15`), LLVM/Clang 23 (apt.llvm.org) incl. libc++, lld, lldb, clangd, clang-format, clang-tidy, sanitizers |
 | C/C++ tooling | CMake 4.2, Ninja, Meson, Autotools, pkg-config, ccache, mold, gdb, valgrind, strace, ltrace, cppcheck, bear, doxygen + graphviz; conan and vcpkg per user (see [Compilers](#compilers)) |
 | Python | Python 3.14 (+ venv, dev headers; `python` = `python3`), `uv` |
-| GUI | X11 forwarding for GUI apps you run (none preinstalled) |
+| GUI | X11 forwarding and the GUI libs VS Code and JetBrains IDEs need, for apps you install into your home (none preinstalled) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, vim/nano/micro/bat, jq, tree, xclip |
 
 ---

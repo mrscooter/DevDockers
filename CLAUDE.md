@@ -33,7 +33,7 @@ final:   SHELL, ENV LANG
 - Home volume (`/home/devuser`, survives recreates): per-user tools the user installs and updates without a rebuild - IDEs, uv tools (conan), the vcpkg clone (General), Claude Code, oh-my-zsh.
 - Anything installed outside `~` inside a running container (e.g. `sudo apt install`) is lost on the next recreate, and `up.sh` recreates after every image change. An apt package worth keeping goes into `extras`.
 - Never point a project cache at an image path (e.g. `PLAYWRIGHT_BROWSERS_PATH=/opt/...`): installs there land in the container layer and are lost on every recreate.
-- Neither image ships an IDE or other GUI app, but both keep full X11 support (X socket mount, `xhost-setup.sh`, `DISPLAY`, dbus-x11, GL libs, machine-id) on purpose: the user installs IDEs and GUI apps by hand, per container, into the home volume. Don't remove the X11 support or FullStack's GUI libs in `base` as unused, and don't bake an IDE or GUI app into an image unless asked.
+- Neither image ships an IDE or other GUI app, but both keep full X11 support (X socket mount, `xhost-setup.sh`, `DISPLAY`, dbus-x11, GL libs, machine-id) on purpose: the user installs IDEs and GUI apps by hand, per container, into the home volume. A hand-installed VS Code or JetBrains IDE must start in both images, so both carry the GUI libs these need (FullStack in `base` plus Playwright's deps, General in `extras`). Don't remove the X11 support or those libs as unused, and don't bake an IDE or GUI app into an image unless asked.
 
 ## Base image pinning
 

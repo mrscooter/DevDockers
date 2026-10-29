@@ -141,9 +141,13 @@ USER root
 
 # extras apt: leaf packages no layer above needs while building - editors, CLI tools.
 # New packages go here by default: editing this list rebuilds only the cheap layers below.
+# Second group: GUI libs that VS Code (Electron) and JetBrains IDEs (JBR AWT + JCEF) need
+# when the user installs them by hand into the home volume.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         wget tree jq xclip iproute2 openssh-client \
         vim nano bat micro less \
+        libgtk-3-0t64 gsettings-desktop-schemas at-spi2-core libnss3 libasound2t64 libgbm1 libgl1 \
+        libdrm2 libxshmfence1 libcups2t64 libsecret-1-0 libxkbfile1 libxtst6 libxi6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Claude Code managed settings: root-owned, so user/project settings cannot override them

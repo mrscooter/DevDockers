@@ -21,7 +21,7 @@ The image ships runtimes, not your app. Your project's own dependencies arrive w
 | Backend | Python 3.14 + `uv` (Astral); `gcc` / `g++` + Python headers, only for building packages that ship no wheel |
 | Frontend | Node.js 24 + npm, Playwright browser OS libs (browsers per project) |
 | DB client | `psql` / `pg_dump` (postgresql-client-16) |
-| GUI | X11 forwarding and GUI libs for apps you install (no IDE or other GUI app preinstalled) |
+| GUI | X11 forwarding and the GUI libs VS Code and JetBrains IDEs need, for apps you install into your home (none preinstalled) |
 | Shell / tools | zsh + Oh My Zsh, Claude Code CLI, git, gh, make, vim/nano/micro/bat, jq, tree, xclip |
 
 ---
