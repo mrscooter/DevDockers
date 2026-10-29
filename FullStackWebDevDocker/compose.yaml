@@ -2,6 +2,9 @@ services:
   dev-env:
     build:
       context: .
+      # Files shared by the dev dockers' images (entrypoint.sh), see the Dockerfile.
+      additional_contexts:
+        shared: ../shared-scripts
       args:
         - USER_ID=${USER_ID:-1000}
         - GROUP_ID=${GROUP_ID:-1000}

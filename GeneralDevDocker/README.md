@@ -108,7 +108,7 @@ Claude can use the SSH keys loaded in the host agent, e.g. for `git push`. This 
 ## How it is wired
 
 - **`/home/devuser` is a named volume** (`devuser-home`) - `~/.ssh`, `~/.claude`, zsh history, your code and caches survive restarts and rebuilds. Wiped only by `docker compose down -v`. Files baked into the image's home (e.g. Oh My Zsh's `.zshrc`) are copied into the volume only when it is first created, so later image rebuilds do not update them. The image's own shell setup therefore lives in `/etc/zsh/zshrc`.
-- **`entrypoint.sh`** runs on every container start: applies the git identity from `.env` (`DEV_NAME` / `DEV_EMAIL`; change it and `docker compose restart dev-env`), adds micro editor defaults (soft wrap) where unset, and updates the utils checkout below.
+- **`entrypoint.sh`** (`../shared-scripts/entrypoint.sh`, shared by both dev dockers) runs on every container start: applies the git identity from `.env` (`DEV_NAME` / `DEV_EMAIL`; change it and `docker compose restart dev-env`), adds micro editor defaults (soft wrap) where unset, and updates the utils checkout below.
 - **`~/Tools/nicnajder-general-utils`** - `entrypoint.sh` clones [mrscooter/nicnajder-general-utils](https://github.com/mrscooter/nicnajder-general-utils) there on the first start and brings its `master` up to date on every start: fast-forwarded when checked out, otherwise only the `master` ref moves. The update fetches anonymously over HTTPS; `origin` is set to the SSH address for your own pull / push. Offline or a diverged `master` only prints a warning. There is no switch to turn it off.
 - **devuser** has UID/GID 1000 and passwordless sudo, deliberately: the container is a space where Claude can do anything without permission prompts, including breaking it.
 

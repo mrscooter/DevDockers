@@ -181,9 +181,11 @@ RUN { \
       echo 'fi'; \
     } >> /etc/zsh/zshrc
 
-# Entrypoint applies git identity + editor defaults on every container start (so .env
-# changes take effect without rebuilding the image or wiping the home volume).
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+# Entrypoint applies git identity + editor defaults and updates the utils checkout on every
+# container start (so .env changes take effect without rebuilding the image or wiping the
+# home volume). Shared by both dev dockers: compose.yaml maps ../shared-scripts, which is
+# outside this build context, to the `shared` build context.
+COPY --from=shared entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER devuser
 ENTRYPOINT ["entrypoint.sh"]
